@@ -1,183 +1,216 @@
 let cellHasValue: number[][] = [];
+let cellValue: string[] = [];
 let colors: string[] = ["b4f2ac", "dfe8ae", "b2bded", "adf0dd"]
 let colorIndex = 0;
 
 function main(workbook: ExcelScript.Workbook) {
-    // Your code here
+  // Your code here
 
-    var courses = workbook.getWorksheet("Courses");
+  var courses = workbook.getWorksheet("Courses");
 
-    var calendar = workbook.getActiveWorksheet();
+  var calendar = workbook.getActiveWorksheet();
 
-    var calendarRange = calendar.getRange("B2:M200");
-    calendarRange.clear();
+  if (calendar.getName() == "Courses")
+  {
+    console.log("error");
+    return;
+  }
 
-    var day : string = calendar.getRange("N2").getValue() as string;
-    var enrollMin: number = calendar.getRange("O2").getValue() as number;
-    var enrollMax: number = calendar.getRange("P2").getValue() as number;
-    
-    switch(day)
-    {
-      case "M":
-        calendar.getRange("A1").setValue("Monday");
-        break;
-      case "T":
-        calendar.getRange("A1").setValue("Tuesday");
-        break;
-      case "W":
-        calendar.getRange("A1").setValue("Wednesday");
-        break;
-      case "Th":
-        calendar.getRange("A1").setValue("Thursday");
-        break;
-      case "F":
-        calendar.getRange("A1").setValue("Friday");
-        break;
-    }
-    
-    // Get data
-    let courseMnemonics: string[][] = courses.getRange("A4:A153").getValues() as string[][]; 
-    let courseNumber: string[][] = courses.getRange("B4:B153").getValues() as string[][]; 
+  var calendarRange = calendar.getRange("B2:M200");
+  calendarRange.clear();
 
-    let days : string[][] = courses.getRange("F4:F153").getValues() as string[][];
+  var day: string = calendar.getRange("N2").getValue() as string;
+  var enrollMin: number = calendar.getRange("O2").getValue() as number;
+  var enrollMax: number = calendar.getRange("P2").getValue() as number;
 
-    let enrollment: number[][] = courses.getRange("J4:J153").getValues() as number[][];
+  switch (day) {
+    case "M":
+      calendar.getRange("A1").setValue("Monday");
+      break;
+    case "T":
+      calendar.getRange("A1").setValue("Tuesday");
+      break;
+    case "W":
+      calendar.getRange("A1").setValue("Wednesday");
+      break;
+    case "Th":
+      calendar.getRange("A1").setValue("Thursday");
+      break;
+    case "F":
+      calendar.getRange("A1").setValue("Friday");
+      break;
+  }
 
-    let startTimes: number[][] = courses.getRange("G4:G153").getValues() as number[][];
+  // Get data
+  type UVAClass = 
+  {
+    courseMnemonic: string;
+    courseNumber: string;
+    day: string;
+    enrollment: number;
+    startTime: number;
+    endTime: number;
+    assignedRoom: string;
+  };
 
-    let endTimes: number[][] = courses.getRange("H4:H153").getValues() as number[][];
+  let uvaClasses : UVAClass[] = [];
+  let classData = courses.getRange("A4:M156").getValues();
+  for (let i = 0; i < classData.length; i++)
+  {
+    uvaClasses[i] = {courseMnemonic: classData[i][0] as string, 
+      courseNumber: classData[i][1] as string,
+      day: classData[i][5] as string,
+      enrollment: classData[i][9] as number,
+      startTime: classData[i][6] as number,
+      endTime: classData[i][7] as number,
+      assignedRoom: classData[i][12] as string};
+  }
 
-    let assignedRooms: string[][] = courses.getRange("M4:M153").getValues() as string[][];
+  let calendarTimes: number[][] = calendar.getRange("A2:A54").getValues() as number[][];
 
-    let calendarTimes: number[][] = calendar.getRange("A2:A54").getValues() as number[][];
+  let roomHeadings: string[][] = calendar.getRange("B1:J1").getValues() as string[][];
 
-    let roomHeadings: string[][] = calendar.getRange("B1:J1").getValues() as string[][];
-    
-    // Look at days to see if they contain the day of the week
-    // we define in N2 on the Calendar sheet, and the enrollment
-    // is within the range we set in O2 and P2
+  // Look at days to see if they contain the day of the week
+  // we define in N2 on the Calendar sheet, and the enrollment
+  // is within the range we set in O2 and P2
 
-    // Check room assignments in data, and if they aren't 
-    // on the calendar, make them
-    
-    for (let i = 0; i < days.length; i++) 
-    {
-      if (days[i][0].includes(day) && enrollment[i][0] <= enrollMax
-        && enrollment[i][0] >= enrollMin &&
-        assignedRooms[i][0] != "") 
+  // Check room assignments in data, and if they aren't 
+  // on the calendar, make them
+
+  for (let i = 0; i < uvaClasses.length; i++) 
+  {
+    if (uvaClasses[i].day.includes(day) && uvaClasses[i].enrollment <= enrollMax
+      && uvaClasses[i].enrollment >= enrollMin &&
+      uvaClasses[i].assignedRoom != "") 
       {
-          if (!roomHeadings[0].includes(assignedRooms[i][0]))
-          {
-              for (let j = 0; j < roomHeadings.length; j++)
-              {
-                if (roomHeadings[0][j] == "")
-                {
-                  roomHeadings[0][j] = assignedRooms[i][0];
-                  calendar.getCell(0, j + 1).setValue(assignedRooms[i][0]);
-                  break;
-                }
-              }
+
+        if (!roomHeadings[0].includes(uvaClasses[i].assignedRoom)) {
+          for (let j = 0; j < roomHeadings.length; j++) {
+            if (roomHeadings[0][j] == "") {
+              roomHeadings[0][j] = uvaClasses[i].assignedRoom;
+              calendar.getCell(0, j + 1).setValue(uvaClasses[i].assignedRoom);
+              break;
+            }
           }
-      }
-    } 
-
-    // Go through first to check for assigned rooms
-    for (let u = 0; u < roomHeadings[0].length; u++)
-    {
-      for (let i = 0; i < days.length; i++) {
-        if (days[i][0].includes(day) && enrollment[i][0] <= enrollMax
-          && enrollment[i][0] >= enrollMin &&
-          assignedRooms[i][0] == roomHeadings[0][u] && 
-          assignedRooms[i][0] != "") {
-          CheckCalendar(i, u + 1, true);
         }
-      } 
+      }
     }
 
+  // Go through first to check for assigned rooms
+  for (let u = 0; u < roomHeadings[0].length; u++) {
+    for (let i = 0; i < uvaClasses.length; i++) {
+      if (uvaClasses[i].day.includes(day) && uvaClasses[i].enrollment <= enrollMax
+        && uvaClasses[i].enrollment >= enrollMin &&
+        uvaClasses[i].assignedRoom == roomHeadings[0][u] &&
+        uvaClasses[i].assignedRoom != "") {
+
+        CheckCalendar(i, u + 1, true);
+
+      }
+    }
+  }
+
+  // Then again for un-assigned rooms
+  for (let i = 0; i < uvaClasses.length; i++) {
+    if (uvaClasses[i].day.includes(day) && uvaClasses[i].enrollment <= enrollMax
+      && uvaClasses[i].enrollment >= enrollMin &&
+      uvaClasses[i].assignedRoom == "") {
+      
+      CheckCalendar(i, 1, false);
+
+    }
+  }
+
+  function CheckCalendar(i: number, columnNumber: number, checkAssignedOverlap: boolean) {
+    let calendarColumnNumber = columnNumber;
+    CheckCalendarTimes(uvaClasses[i].startTime, uvaClasses[i].endTime, calendarTimes, calendar, uvaClasses[i].courseMnemonic, uvaClasses[i].courseNumber, uvaClasses[i].enrollment, calendarColumnNumber, checkAssignedOverlap);
+    colorIndex++; // We use this to change the fill colors on different classes
+    if (colorIndex > colors.length - 1) {
+      colorIndex = 0;
+    }
+  }
+
+}
+function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: number[][], calendar: ExcelScript.Worksheet, courseMnemonic: string, courseNumber: string, enrollment: number, calendarColumnNumber: number, checkAssignedOverlap: boolean) {
+  let adjusterNumber = 0;
+  let currentCourseTimeBlock = 0; //Used to determine where one 
+  // course ends and the other starts
+
+  // Sort the already assigned blocks so we can iterate through them
+  // easily in the for loop below
+
+  var sortedCellHasValue = cellHasValue.sort((a, b) => {
+    if (a[1] === b[1]) {
+      return 0;
+    }
+    else {
+      return (a[1] < b[1]) ? -1 : 1;
+    }
+  });
+  var overlapFound: boolean = false;
+
+  // First go through to see if any times overlap with existing data
   
+  for (let i = 0; i < calendarTimes.length; i++) {
     
+    let tempAdjusterNumber = 0;
+    
+    if (startTime <= calendarTimes[i][0] && endTime >= calendarTimes[i][0]) {
+      // We use the sorted value here because these used 
+      // cells build on top of each other
 
-    // Then again for un-assigned rooms
-    for (let i = 0; i < days.length; i++) {
-      if (days[i][0].includes(day) && enrollment[i][0] <= enrollMax
-        && enrollment[i][0] >= enrollMin &&
-        assignedRooms[i][0] == "") {
-        CheckCalendar(i, 1, false);
-      }
-    } 
-
-    function CheckCalendar(i:number, columnNumber: number, checkAssignedOverlap: boolean)
-    {
-        let calendarColumnNumber = columnNumber;
-        CheckCalendarTimes(startTimes[i][0], endTimes[i][0], calendarTimes, calendar, courseMnemonics[i][0], courseNumber[i][0], enrollment[i][0], calendarColumnNumber, checkAssignedOverlap);
-        colorIndex++; // We use this to change the fill colors on different classes
-        if (colorIndex > colors.length - 1) {
-          colorIndex = 0;
+      for (let j = 0; j < sortedCellHasValue.length; j++) {
+        if (sortedCellHasValue[j][0] == i + 1 && sortedCellHasValue[j][1] == calendarColumnNumber + tempAdjusterNumber) {
+            if (checkAssignedOverlap) {
+              overlapFound = true;
+            }
+            else {
+              tempAdjusterNumber++;
+            }
+          }
         }
+      }
+
+      if (tempAdjusterNumber > adjusterNumber)
+      {
+        adjusterNumber = tempAdjusterNumber;
+      }
+
     }
+
     
-}
-function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: number[][], calendar: ExcelScript.Worksheet, courseMnemonic: string, courseNumber: string, enrollment: number, calendarColumnNumber: number, checkAssignedOverlap: boolean)
-{
-    let adjusterNumber = 0;
-    let currentCourseTimeBlock = 0; //Used to determine where one 
-    // course ends and the other starts
+    for (let i = 0; i < calendarTimes.length; i++) {
+      if (startTime <= calendarTimes[i][0] && endTime >= calendarTimes[i][0]) {
+        if (overlapFound) {
+          let newCellValue = LookupStoredCellValue(i + 1, calendarColumnNumber + adjusterNumber, courseMnemonic + " " + courseNumber + ": " + enrollment);
+          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).setValue(newCellValue);
+          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getFill().setColor("red");
+        }
+        else {
+          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).setValue(courseMnemonic + " " + courseNumber + ": " + enrollment);
+          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getFill().setColor(colors[colorIndex]);
+        }
 
-    // Sort the already assigned blocks so we can iterate through them
-    // easily in the for loop below
 
-    var sortedCellHasValue = cellHasValue.sort((a,b) => {
-      if (a[1] === b[1]) {
-        return 0;
+        calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getRangeBorder(ExcelScript.BorderIndex.edgeRight).setStyle(ExcelScript.BorderLineStyle.dashDot);
+        if (currentCourseTimeBlock < 1) {
+          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getRangeBorder(ExcelScript.BorderIndex.edgeTop).setStyle(ExcelScript.BorderLineStyle.dashDot);
+        }
+        currentCourseTimeBlock++;
+
+        cellHasValue.push([i + 1, calendarColumnNumber + adjusterNumber]);
+        cellValue.push(courseMnemonic + " " + courseNumber + ": " + enrollment)
       }
-      else {
-        return (a[1] < b[1]) ? -1 : 1;
-      }
-    });
-
-    for (let i = 0; i < calendarTimes.length; i++)
+    }
+    function LookupStoredCellValue(x: number, y:number, currentString: string)
     {
-        if (startTime <= calendarTimes[i][0] && endTime >= calendarTimes[i][0])
+      for(let i = 0; i < sortedCellHasValue.length; i++)
+      {
+        if (sortedCellHasValue[i][0] == x && sortedCellHasValue[i][1] == y)
         {
-            // We use the sorted value here because these used 
-            // cells build on top of each other
-            
-            var overlapFound: boolean = false;
-
-            for (let j = 0; j < sortedCellHasValue.length; j++)
-            {
-              if (sortedCellHasValue[j][0] == i + 1 && sortedCellHasValue[j][1] == calendarColumnNumber + adjusterNumber) {
-                if (checkAssignedOverlap)
-                {
-                  overlapFound = true;
-                }
-                else {
-                  adjusterNumber++;
-                }
-              }
-            }
-
-            
-            if (overlapFound)
-            {
-              calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).setValue(calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getValue() + " / " + courseMnemonic + " " + courseNumber);
-              calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getFill().setColor("red");
-            }
-            else 
-            {
-              calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).setValue(courseMnemonic + " " + courseNumber + ": " + enrollment);
-              calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getFill().setColor(colors[colorIndex]);
-            }
-              
-
-            calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getRangeBorder(ExcelScript.BorderIndex.edgeRight).setStyle(ExcelScript.BorderLineStyle.dashDot);
-            if (currentCourseTimeBlock < 1)
-            {
-              calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getRangeBorder(ExcelScript.BorderIndex.edgeTop).setStyle(ExcelScript.BorderLineStyle.dashDot);
-            }
-            currentCourseTimeBlock++;
-
-            cellHasValue.push([i + 1,calendarColumnNumber + adjusterNumber]);
+          cellValue[i] = cellValue[i] + " / " + currentString; 
+          return cellValue[i];
         }
+      }
     }
-}
+  }

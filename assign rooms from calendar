@@ -31,7 +31,7 @@ function main(workbook: ExcelScript.Workbook) {
       
 
       let classIndex = simpleUniqueIndexes.indexOf(uniqueIndexString);
-      courses.getCell(classIndex, 12).setValue(assignedRooms[0][j]);
+      courses.getCell(classIndex - 1, 12).setValue(assignedRooms[0][j]);
     }
     
   }

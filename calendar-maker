@@ -51,10 +51,11 @@ function main(workbook: ExcelScript.Workbook) {
     startTime: number;
     endTime: number;
     assignedRoom: string;
+    uniqueIndex: number;
   };
 
   let uvaClasses : UVAClass[] = [];
-  let classData = courses.getRange("A4:M156").getValues();
+  let classData = courses.getRange("A4:O156").getValues();
   for (let i = 0; i < classData.length; i++)
   {
     uvaClasses[i] = {courseMnemonic: classData[i][0] as string, 
@@ -63,7 +64,8 @@ function main(workbook: ExcelScript.Workbook) {
       enrollment: classData[i][9] as number,
       startTime: classData[i][6] as number,
       endTime: classData[i][7] as number,
-      assignedRoom: classData[i][12] as string};
+      assignedRoom: classData[i][12] as string,
+      uniqueIndex: classData[i][14] as number};
   }
 
   let calendarTimes: number[][] = calendar.getRange("A2:A54").getValues() as number[][];

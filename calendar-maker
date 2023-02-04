@@ -7,7 +7,7 @@ function main(workbook: ExcelScript.Workbook) {
 
     var courses = workbook.getWorksheet("Courses");
 
-    var calendar = workbook.getWorksheet("Calendar");
+    var calendar = workbook.getActiveWorksheet();
 
     var calendarRange = calendar.getRange("B2:M200");
     calendarRange.clear();
@@ -93,6 +93,8 @@ function main(workbook: ExcelScript.Workbook) {
         }
       } 
     }
+
+  
     
 
     // Then again for un-assigned rooms
@@ -107,7 +109,7 @@ function main(workbook: ExcelScript.Workbook) {
     function CheckCalendar(i:number, columnNumber: number, checkAssignedOverlap: boolean)
     {
         let calendarColumnNumber = columnNumber;
-        CheckCalendarTimes(startTimes[i][0], endTimes[i][0], calendarTimes, calendar, courseMnemonics[i][0], courseNumber[i][0], calendarColumnNumber, checkAssignedOverlap);
+        CheckCalendarTimes(startTimes[i][0], endTimes[i][0], calendarTimes, calendar, courseMnemonics[i][0], courseNumber[i][0], enrollment[i][0], calendarColumnNumber, checkAssignedOverlap);
         colorIndex++; // We use this to change the fill colors on different classes
         if (colorIndex > colors.length - 1) {
           colorIndex = 0;
@@ -115,7 +117,7 @@ function main(workbook: ExcelScript.Workbook) {
     }
     
 }
-function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: number[][], calendar: ExcelScript.Worksheet, courseMnemonic: string, courseNumber: string, calendarColumnNumber: number, checkAssignedOverlap: boolean)
+function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: number[][], calendar: ExcelScript.Worksheet, courseMnemonic: string, courseNumber: string, enrollment: number, calendarColumnNumber: number, checkAssignedOverlap: boolean)
 {
     let adjusterNumber = 0;
     let currentCourseTimeBlock = 0; //Used to determine where one 
@@ -163,7 +165,7 @@ function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: n
             }
             else 
             {
-              calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).setValue(courseMnemonic + " " + courseNumber);
+              calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).setValue(courseMnemonic + " " + courseNumber + ": " + enrollment);
               calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getFill().setColor(colors[colorIndex]);
             }
               

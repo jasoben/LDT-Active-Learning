@@ -125,7 +125,7 @@ function main(workbook: ExcelScript.Workbook) {
 
   function CheckCalendar(i: number, columnNumber: number, checkAssignedOverlap: boolean) {
     let calendarColumnNumber = columnNumber;
-    CheckCalendarTimes(uvaClasses[i].startTime, uvaClasses[i].endTime, calendarTimes, calendar, uvaClasses[i].courseMnemonic, uvaClasses[i].courseNumber, uvaClasses[i].enrollment, calendarColumnNumber, checkAssignedOverlap);
+    CheckCalendarTimes(uvaClasses[i].startTime, uvaClasses[i].endTime, calendarTimes, calendar, uvaClasses[i].courseMnemonic, uvaClasses[i].courseNumber, uvaClasses[i].enrollment, calendarColumnNumber, checkAssignedOverlap, uvaClasses[i].uniqueIndex);
     colorIndex++; // We use this to change the fill colors on different classes
     if (colorIndex > colors.length - 1) {
       colorIndex = 0;
@@ -133,7 +133,7 @@ function main(workbook: ExcelScript.Workbook) {
   }
 
 }
-function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: number[][], calendar: ExcelScript.Worksheet, courseMnemonic: string, courseNumber: string, enrollment: number, calendarColumnNumber: number, checkAssignedOverlap: boolean) {
+function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: number[][], calendar: ExcelScript.Worksheet, courseMnemonic: string, courseNumber: string, enrollment: number, calendarColumnNumber: number, checkAssignedOverlap: boolean, uniqueIndex: number) {
   let adjusterNumber = 0;
   let currentCourseTimeBlock = 0; //Used to determine where one 
   // course ends and the other starts
@@ -183,25 +183,28 @@ function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: n
     
     for (let i = 0; i < calendarTimes.length; i++) {
       if (startTime <= calendarTimes[i][0] && endTime >= calendarTimes[i][0]) {
+
+        let cell = calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber);
+        
         if (overlapFound) {
-          let newCellValue = LookupStoredCellValue(i + 1, calendarColumnNumber + adjusterNumber, courseMnemonic + " " + courseNumber + ": " + enrollment);
-          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).setValue(newCellValue);
-          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getFill().setColor("red");
+          let newCellValue = LookupStoredCellValue(i + 1, calendarColumnNumber + adjusterNumber, courseMnemonic + " " + courseNumber + ": " + enrollment + " [" + uniqueIndex + "]");
+          cell.setValue(newCellValue);
+          cell.getFormat().getFill().setColor("red");
         }
         else {
-          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).setValue(courseMnemonic + " " + courseNumber + ": " + enrollment);
-          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getFill().setColor(colors[colorIndex]);
+          cell.setValue(courseMnemonic + " " + courseNumber + ": " + enrollment + " [" + uniqueIndex + "]");
+          cell.getFormat().getFill().setColor(colors[colorIndex]);
         }
 
 
-        calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getRangeBorder(ExcelScript.BorderIndex.edgeRight).setStyle(ExcelScript.BorderLineStyle.dashDot);
+        cell.getFormat().getRangeBorder(ExcelScript.BorderIndex.edgeRight).setStyle(ExcelScript.BorderLineStyle.dashDot);
         if (currentCourseTimeBlock < 1) {
-          calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber).getFormat().getRangeBorder(ExcelScript.BorderIndex.edgeTop).setStyle(ExcelScript.BorderLineStyle.dashDot);
+          cell.getFormat().getRangeBorder(ExcelScript.BorderIndex.edgeTop).setStyle(ExcelScript.BorderLineStyle.dashDot);
         }
         currentCourseTimeBlock++;
 
         cellHasValue.push([i + 1, calendarColumnNumber + adjusterNumber]);
-        cellValue.push(courseMnemonic + " " + courseNumber + ": " + enrollment)
+        cellValue.push(courseMnemonic + " " + courseNumber + ": " + enrollment + " [" + uniqueIndex + "]");
       }
     }
     function LookupStoredCellValue(x: number, y:number, currentString: string)

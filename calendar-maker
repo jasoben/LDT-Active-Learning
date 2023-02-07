@@ -12,8 +12,7 @@ function main(workbook: ExcelScript.Workbook) {
 
   if (calendar.getName() == "Courses")
   {
-    console.log("error");
-    return;
+    throw "don't run this on the courses page"
   }
 
   var calendarRange = calendar.getRange("B2:M200");
@@ -54,8 +53,10 @@ function main(workbook: ExcelScript.Workbook) {
     uniqueIndex: number;
   };
 
+  let usedRange = courses.getUsedRange();
+  let rowCount = usedRange.getRowCount();
   let uvaClasses : UVAClass[] = [];
-  let classData = courses.getRange("A4:O156").getValues();
+  let classData = courses.getRange("A4:O" + rowCount as string).getValues();
   for (let i = 0; i < classData.length; i++)
   {
     uvaClasses[i] = {courseMnemonic: classData[i][0] as string, 
@@ -81,13 +82,13 @@ function main(workbook: ExcelScript.Workbook) {
 
   for (let i = 0; i < uvaClasses.length; i++) 
   {
-    if (uvaClasses[i].day.includes(day) && uvaClasses[i].enrollment <= enrollMax
+    if (uvaClasses[i].day.includes(day) && CheckTuesdays(uvaClasses[i].day, i) && uvaClasses[i].enrollment <= enrollMax
       && uvaClasses[i].enrollment >= enrollMin &&
       uvaClasses[i].assignedRoom != "") 
       {
 
         if (!roomHeadings[0].includes(uvaClasses[i].assignedRoom)) {
-          for (let j = 0; j < roomHeadings.length; j++) {
+          for (let j = 0; j < roomHeadings[0].length; j++) {
             if (roomHeadings[0][j] == "") {
               roomHeadings[0][j] = uvaClasses[i].assignedRoom;
               calendar.getCell(0, j + 1).setValue(uvaClasses[i].assignedRoom);
@@ -98,10 +99,19 @@ function main(workbook: ExcelScript.Workbook) {
       }
     }
 
+    function CheckTuesdays(classDay : string, i : number) : boolean
+    { 
+      if (day == "T" && classDay == "Th")
+      {
+        return false;
+      }
+      else return true;
+    }
+
   // Go through first to check for assigned rooms
   for (let u = 0; u < roomHeadings[0].length; u++) {
     for (let i = 0; i < uvaClasses.length; i++) {
-      if (uvaClasses[i].day.includes(day) && uvaClasses[i].enrollment <= enrollMax
+      if (uvaClasses[i].day.includes(day) && CheckTuesdays(uvaClasses[i].day, i) && uvaClasses[i].enrollment <= enrollMax
         && uvaClasses[i].enrollment >= enrollMin &&
         uvaClasses[i].assignedRoom == roomHeadings[0][u] &&
         uvaClasses[i].assignedRoom != "") {
@@ -114,7 +124,7 @@ function main(workbook: ExcelScript.Workbook) {
 
   // Then again for un-assigned rooms
   for (let i = 0; i < uvaClasses.length; i++) {
-    if (uvaClasses[i].day.includes(day) && uvaClasses[i].enrollment <= enrollMax
+    if (uvaClasses[i].day.includes(day) && CheckTuesdays(uvaClasses[i].day, i) && uvaClasses[i].enrollment <= enrollMax
       && uvaClasses[i].enrollment >= enrollMin &&
       uvaClasses[i].assignedRoom == "") {
       
@@ -186,11 +196,13 @@ function CheckCalendarTimes(startTime: number, endTime: number, calendarTimes: n
 
         let cell = calendar.getCell(i + 1, calendarColumnNumber + adjusterNumber);
         
+        // For assigned rooms where the courses overlap
         if (overlapFound) {
           let newCellValue = LookupStoredCellValue(i + 1, calendarColumnNumber + adjusterNumber, courseMnemonic + " " + courseNumber + ": " + enrollment + " [" + uniqueIndex + "]");
           cell.setValue(newCellValue);
           cell.getFormat().getFill().setColor("red");
         }
+        // For unassigned rooms
         else {
           cell.setValue(courseMnemonic + " " + courseNumber + ": " + enrollment + " [" + uniqueIndex + "]");
           cell.getFormat().getFill().setColor(colors[colorIndex]);

@@ -73,6 +73,7 @@ function main(workbook: ExcelScript.Workbook) {
 
   let roomHeadings: string[][] = calendar.getRange("B1:J1").getValues() as string[][];
 
+  console.log(roomHeadings[0].length);
   // Look at days to see if they contain the day of the week
   // we define in N2 on the Calendar sheet, and the enrollment
   // is within the range we set in O2 and P2

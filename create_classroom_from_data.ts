@@ -20,8 +20,9 @@ function main(workbook: ExcelScript.Workbook) {
         throw "don't run this on the courses page"
     }
 
-    var classRoomRange = classRooms.getRange("B3:Z55");
+    var classRoomRange = classRooms.getRange("B3:BZ55");
     classRoomRange.clear();
+    classRoomRange.clear(ExcelScript.ClearApplyTo.formats);
 
     var enrollMin: number = classRooms.getRange("B57").getValue() as number;
     var enrollMax: number = classRooms.getRange("C57").getValue() as number;
@@ -61,6 +62,19 @@ function main(workbook: ExcelScript.Workbook) {
 
     roomHeadings = classRooms.getRange("B1:BZ1").getValues() as string[][];
 
+    for (let i = 0; i < roomHeadings[0].length; i++)
+    {
+      for (let j = 0; j < roomHeadings[0].length; j++)
+      {
+        while (i != j && roomHeadings[0][i] != "")
+        {
+          if (roomHeadings[0][i].trim() == roomHeadings[0][j].trim())
+            throw "You have a duplicate room in the header row 1: " + roomHeadings[0][i];
+          else
+            break; 
+        }
+      }
+    }
     // Check classes for enrollment and assign to columns in sheet
     for (let i = 0; i < uvaClasses.length; i++) {
         if (uvaClasses[i].enrollment <= enrollMax && uvaClasses[i].enrollment >= enrollMin) {
@@ -92,9 +106,12 @@ function CheckClassRoomsTimes(startTime: number, endTime: number, courseMnemonic
             tempUniqueID = uniqueIndex;
 
             let roomHeadingColumnNumber: number;
-
+            if (assignedRoom == "")
+            {    
+              assignedRoom = "Unassigned";
+            }
             for (let j = 0; j < roomHeadings[0].length; j++) {
-                if (assignedRoom != "" && assignedRoom == roomHeadings[0][j]) {
+                if (assignedRoom.trim() == roomHeadings[0][j].trim()) {
                     roomHeadingColumnNumber = j + 1; // We add one because it is index 0 and starts at column B
                     for (let j = 0; j < days.length; j++) {
                         if ((day.includes(days[j]) && day != "Th") ||

@@ -92,9 +92,10 @@ function CheckClassRoomsTimes(startTime: number, endTime: number, courseMnemonic
             tempUniqueID = uniqueIndex;
 
             let roomHeadingColumnNumber: number;
-
+            if (assignedRoom == "")
+                assignedRoom = "Unassigned";
             for (let j = 0; j < roomHeadings[0].length; j++) {
-                if (assignedRoom != "" && assignedRoom == roomHeadings[0][j]) {
+                if (assignedRoom == roomHeadings[0][j]) {
                     roomHeadingColumnNumber = j + 1; // We add one because it is index 0 and starts at column B
                     for (let j = 0; j < days.length; j++) {
                         if ((day.includes(days[j]) && day != "Th") ||

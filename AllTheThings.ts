@@ -32,7 +32,7 @@ function main(workbook: ExcelScript.Workbook) {
   var courses = workbook.getWorksheet("Courses");
   var calendar = workbook.getWorksheet("Calendar");
   
-  var entireSheet: ExcelScript.Range = calendar.getRange("A1:Z1000");
+  var entireSheet: ExcelScript.Range = calendar.getRange("A1:ZZ1000");
 
   type UVAClass =
   {
@@ -179,9 +179,7 @@ function main(workbook: ExcelScript.Workbook) {
             rooms[i].schedule.get("M")[row] = courseInfo;
             foundSpot = true;
           }
-          else {
-            return;
-          }
+          
         }
         if (uvaClass.day == "TuTh" || uvaClass.day == "T") {
           if (rooms[i].schedule.get("T")[row] == "") {
@@ -189,36 +187,28 @@ function main(workbook: ExcelScript.Workbook) {
             foundSpot = true;
             
           }
-          else {
-            return;
-          }
+          
         }
         if (uvaClass.day.includes("W")) {
           if (rooms[i].schedule.get("W")[row] == "") {
             rooms[i].schedule.get("W")[row] = courseInfo;
             foundSpot = true;
           }
-          else {
-            return;
-          }
+          
         }
         if (uvaClass.day.includes("Th")) {
           if (rooms[i].schedule.get("Th")[row] == "") {
             rooms[i].schedule.get("Th")[row] = courseInfo;
             foundSpot = true;
           }
-          else {
-            return;
-          }
+          
         }
         if (uvaClass.day.includes("F")) {
           if (rooms[i].schedule.get("F")[row] == "") {
             rooms[i].schedule.get("F")[row] = courseInfo;
             foundSpot = true;
           }
-          else {
-            return;
-          }
+          
         }
 
         

@@ -9,6 +9,8 @@ function main(workbook: ExcelScript.Workbook) {
   let startOfClass: boolean = false;
   var classRoomsTimes: number[][] = [];
   let startNewCourseBlock: boolean = false;
+  let startingRowIndexForTimes = 2; // it's actually row 3, but they are indexed from 0
+  let startingRowIndexForCourseData = 4; 
   
   type room = {
       name: string;
@@ -44,8 +46,10 @@ function main(workbook: ExcelScript.Workbook) {
   let uvaClasses: UVAClass[] = [];
   let classData = courses.getRange("A4:O" + rowCount as string).getValues();
 
-  AssignRooms();
   GetDataFromCoursesSheet();
+  CreateRooms();
+  CreateScheduleBasics();
+  FillInManuallyAssignedClasses();
   AttemptToMakeSchedule();
 
   function GetDataFromCoursesSheet() {
@@ -60,12 +64,12 @@ function main(workbook: ExcelScript.Workbook) {
           endTime: classData[i][7] as number,
           assignedRoom: classData[i][12] as string,
           uniqueIndex: classData[i][14] as number,
-          rowInDatabase: i + 4 // the data starts on row 4
+          rowInDatabase: i + startingRowIndexForCourseData
       };
     }
   }
 
-  function AssignRooms() {
+  function CreateRooms() {
     
     let roomsRange = roomsSheet.getUsedRange();
     let roomsCount = roomsRange.getRowCount();
@@ -82,7 +86,8 @@ function main(workbook: ExcelScript.Workbook) {
     rooms.sort( (a,b) => (a.capacity < b.capacity) ? -1 : 1);
   }
 
-  function InitializeRoomSchedule(): Map<string, string[][]> {
+
+  function InitializeRoomSchedule(): Map<string, string[][]> { // This fills the arrays with empty values so we can put classes in specific indexes of the schedule
     let schedule: Map<string, string[][]> = new Map<string, string[][]>();
     let defaultValuesM: string[][] = [];
     let defaultValuesTu: string[][] = [];
@@ -107,28 +112,58 @@ function main(workbook: ExcelScript.Workbook) {
     return schedule;
   }
 
-  function AttemptToMakeSchedule() {
-    CreateScheduleBasics();
-    let times = calendar.getRange("A3:A56");
-    let rowCount = times.getRowCount();
-    let cellTimeValues = times.getValues() as number[][];
+  function FillInManuallyAssignedClasses() {
+    let timeValues = calendar.getRange("A3:A56").getValues();
     for (let i = 0; i < uvaClasses.length; i++) {
-      for (let j = 0; j < rowCount; j++) {
-        if (cellTimeValues[j][0] >= uvaClasses[i].startTime && cellTimeValues[j][0] < uvaClasses[i].endTime) {
+      if (uvaClasses[i].assignedRoom != "") {
+        let roomIndex = rooms.findIndex(room => room.name == uvaClasses[i].assignedRoom);
+        let timeIndex = timeValues.findIndex(time => time[0] == uvaClasses[i].startTime);
+
+        for (let j = timeIndex; j < timeValues.length; j++) {
+          if (uvaClasses[i].endTime > timeValues[j][0]) {
+            FillOpenSlot(uvaClasses[i], j, roomIndex, "yes");
+          }
+          else break;
+        }      
+      }
+    }
+  }
+
+  function AttemptToMakeSchedule() {
+
+    let times = calendar.getRange("A3:A56");
+    let timeRowCount = times.getRowCount();
+    let cellTimeValues = times.getValues() as number[][];
+
+    for (let i = 0; i < uvaClasses.length; i++) {
+      
+      if (uvaClasses[i].assignedRoom != "") { // skip manually assigned rooms
+        continue;
+      }
+
+      for (let j = 0; j < timeRowCount; j++) {
+        if (cellTimeValues[j][0] == uvaClasses[i].startTime) {
           let wholeCourseDurationOpenOnCalendar = 1; // boolean as number
           var foundRoomIndex : number;
-       
+          let courseDuration = 0;
+
           for (let k = 0; k < 10; k++) { // we need to check for the whole duration of the course
             if (cellTimeValues[j + k][0] >= uvaClasses[i].startTime && cellTimeValues[j + k][0] < uvaClasses[i].endTime) {
-              let attemptInfo = AttemptToFindOpenSlot(uvaClasses[i], j + k);
-              wholeCourseDurationOpenOnCalendar = attemptInfo[0] * wholeCourseDurationOpenOnCalendar;
-              foundRoomIndex = attemptInfo[1];
+              courseDuration++;
             }
             else 
               break;
           }
-          if (wholeCourseDurationOpenOnCalendar == 1) {
-            FillOpenSlot(uvaClasses[i], j, foundRoomIndex);
+
+          let roomFindAttempt = AttemptToFindOpenSlot(uvaClasses[i], j, courseDuration);
+          let isRoomFound = roomFindAttempt[0] == 1 ? true : false;
+          let roomFoundIndex = roomFindAttempt[1];
+
+          if (isRoomFound) { // if we checked the whole duration and it's open
+            for (let k = 0; k < courseDuration; k++) {
+              FillOpenSlot(uvaClasses[i], j + k, roomFoundIndex, "no");
+            }
+            
           }
         }
       }
@@ -141,7 +176,7 @@ function main(workbook: ExcelScript.Workbook) {
   }
   
 
-  function AttemptToFindOpenSlot(uvaClass: UVAClass, row: number) : [number, number] {
+  function AttemptToFindOpenSlot(uvaClass: UVAClass, row: number, courseDuration: number) : [number, number] {
 
     let foundSpot = 0; // using number as boolean
     var roomIndex : number;
@@ -152,42 +187,46 @@ function main(workbook: ExcelScript.Workbook) {
 
         foundSpot = 1; // we have a room that could hypothetically hold the class, but we need to check each day
 
-        if (uvaClass.day.includes("M")) {
-          if (rooms[i].schedule.get("M")[row][0] == "") {
-            truthValues.push(1);
+        for (let j = 0; j < courseDuration; j++) { // we need to check the whole duration
+          if (uvaClass.day.includes("M")) {
+            if (rooms[i].schedule.get("M")[row + j][0] == "") {
+              truthValues.push(1);
+            }
+            else truthValues.push(0);
           }
-          else truthValues.push(0);
-        }
-        if (uvaClass.day == "TuTh" || uvaClass.day == "T") {
-          
-          if (rooms[i].schedule.get("T")[row][0] == "") {
-            truthValues.push(1);
+          if (uvaClass.day == "TuTh" || uvaClass.day == "T") {
+
+            if (rooms[i].schedule.get("T")[row + j][0] == "") {
+              truthValues.push(1);
+            }
+            else truthValues.push(0);
           }
-          else truthValues.push(0);
-        }
-        if (uvaClass.day.includes("W")) {
-          if (rooms[i].schedule.get("W")[row][0] == "") {
-            truthValues.push(1);
+          if (uvaClass.day.includes("W")) {
+            if (rooms[i].schedule.get("W")[row + j][0] == "") {
+              truthValues.push(1);
+            }
+            else truthValues.push(0);
           }
-          else truthValues.push(0);
-        }
-        if (uvaClass.day.includes("Th")) {
-          if (rooms[i].schedule.get("Th")[row][0] == "") {
-            truthValues.push(1);
+          if (uvaClass.day.includes("Th")) {
+            if (rooms[i].schedule.get("Th")[row + j][0] == "") {
+              truthValues.push(1);
+            }
+            else truthValues.push(0);
           }
-          else truthValues.push(0);
-        }
-        if (uvaClass.day.includes("F")) {
-          if (rooms[i].schedule.get("F")[row][0] == "") {
-            truthValues.push(1);
+          if (uvaClass.day.includes("F")) {
+            if (rooms[i].schedule.get("F")[row + j][0] == "") {
+              truthValues.push(1);
+            }
+            else truthValues.push(0);
           }
-          else truthValues.push(0);
         }
+        
       }
 
       for (let j = 0; j < truthValues.length; j++) {
         foundSpot = foundSpot * truthValues[j];
       }
+
 
       if (foundSpot == 1) {
         roomIndex = i;
@@ -200,28 +239,46 @@ function main(workbook: ExcelScript.Workbook) {
     return [ foundSpot, roomIndex];
   }
 
-  function FillOpenSlot(uvaClass: UVAClass, row: number, foundRoomIndex: number) {
-    let courseInfo = uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " " + uvaClass.rowInDatabase;
+  function FillOpenSlot(uvaClass: UVAClass, row: number, foundRoomIndex: number, isRoomAssigned: string) {
+    let courseInfo = uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " {" + uvaClass.rowInDatabase + "}";
+
+    function CheckIfAlreadyAssigned(dayOfWeek: string) {
+      if (rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0] != "") {
+        throw "You may have assigned this class: " + uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " " + uvaClass.rowInDatabase + " to the same room at the same time as this class: " + rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0];
+      }
+    }
+
+    function AssignScheduleValues(dayOfWeek: string) {
+      rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0] = courseInfo;
+      rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].push(isRoomAssigned);
+      
+    }
 
     if (uvaClass.day.includes("M")) {
-      rooms[foundRoomIndex].schedule.get("M")[row][0] = courseInfo;
+      CheckIfAlreadyAssigned("M");
+      AssignScheduleValues("M");
     }
     if (uvaClass.day == "TuTh" || uvaClass.day == "T") {
-      rooms[foundRoomIndex].schedule.get("T")[row][0] = courseInfo;
+      CheckIfAlreadyAssigned("T");
+      AssignScheduleValues("T");
     }
+
     if (uvaClass.day.includes("W")) {
-      rooms[foundRoomIndex].schedule.get("W")[row][0] = courseInfo;
+      CheckIfAlreadyAssigned("W");
+      AssignScheduleValues("W");
     }
     if (uvaClass.day.includes("Th")) {
-      rooms[foundRoomIndex].schedule.get("Th")[row][0] = courseInfo;
+      CheckIfAlreadyAssigned("Th");
+      AssignScheduleValues("Th");
     }
     if (uvaClass.day.includes("F")) {
-      rooms[foundRoomIndex].schedule.get("F")[row][0] = courseInfo;
+      CheckIfAlreadyAssigned("F");
+      AssignScheduleValues("F");
     }
 
   }
 
-  function CreateScheduleBasics() {
+  function CreateScheduleBasics() { // Fills out the times 
     entireSheet.clear();
     let hour = 8;
     let mod = 0;
@@ -245,7 +302,7 @@ function main(workbook: ExcelScript.Workbook) {
     }
   }
 
-  function CreateRoomSchedule() {
+  function CreateRoomSchedule() { // Fills in the classes in rooms
 
     let spacer = 6;
     
@@ -254,12 +311,28 @@ function main(workbook: ExcelScript.Workbook) {
       roomNameCell.setValue(rooms[i].name);
 
       function makeColumn(spacerValue:number, dayOfWeek: string, dayChar: string) {
+        let courseScheduleData: string[][] = [];
+        for (let j = 0; j < rooms[i].schedule.get(dayChar).length; j++) { // separate out the schedule data from any other relevant data
+          courseScheduleData.push([""]);
+          courseScheduleData[j][0] = rooms[i].schedule.get(dayChar)[j][0];
+        } 
         let dayCell = entireSheet.getCell(1, (i * spacer) + spacerValue);
         dayCell.setValue(dayOfWeek);
         let targetCell = entireSheet.getCell(2, (i * spacer) + spacerValue);
         let targetRange = targetCell.getResizedRange(rooms[i].schedule.get(dayChar).length - 1, 0);
         
-        targetRange.setValues(rooms[i].schedule.get(dayChar));
+        targetRange.setValues(courseScheduleData);
+        setColors();
+
+        function setColors() {
+          for (let k = 0; k < rooms[i].schedule.get(dayChar).length - 1; k++) {
+            let isAssigned = rooms[i].schedule.get(dayChar)[k][1] == "yes" ? true : false;
+            if (isAssigned) {
+              let coloredCell = entireSheet.getCell(k + startingRowIndexForTimes, (i * spacer) + spacerValue);
+              coloredCell.getFormat().getFill().setColor("red");
+            }
+          }
+        }
       }
 
       makeColumn(1, "Monday", "M");
@@ -268,8 +341,11 @@ function main(workbook: ExcelScript.Workbook) {
       makeColumn(4, "Thursday", "Th");
       makeColumn(5, "Friday", "F");
 
+
+
     } 
   }
+
 }
 
     

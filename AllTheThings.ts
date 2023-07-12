@@ -2,8 +2,8 @@ function main(workbook: ExcelScript.Workbook) {
 
   let cellHasValue: number[][] = [];
   let cellValue: string[] = [];
-  let mwfColors: string[] = ["b4f2ac", "dfe8ae", "green"];
-  let tthColors: string[] = ["b2bded", "adf0dd", "blue"];
+  let mwfColors: string[] = ["b4f2ac", "dfe8ae", "fce4d6"];
+  let tthColors: string[] = ["b2bded", "adf0dd", "e9c6f7"];
   let colorIndex = 0;
   let roomHeadings: string[][] = [];
   let days: string[] = ["M", "T", "W", "Th", "F"]
@@ -415,12 +415,10 @@ function main(workbook: ExcelScript.Workbook) {
 
   }
   console.log("adding colors");
-  console.log(roomColorRanges.length);
 
   for (let i = 0; i < roomColorRanges.length; i++) {
     let color = roomColorRanges[i].color;
     roomColorRanges[i].range.getFormat().getFill().setColor(color);
-    if (i % 1000 == 0) console.log("reducing payload"); // to reduce payload
   }
 
 }

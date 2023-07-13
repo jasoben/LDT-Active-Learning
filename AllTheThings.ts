@@ -4,12 +4,12 @@ function main(workbook: ExcelScript.Workbook) {
   let cellValue: string[] = [];
   let mwfColors: string[] = ["b4f2ac", "dfe8ae", "fce4d6"];
   let tthColors: string[] = ["b2bded", "adf0dd", "e9c6f7"];
+  let undersizedClassColor: string = "blue";
+  let assignedRoomColor = "green";
   let colorIndex = 0;
   let roomHeadings: string[][] = [];
   let days: string[] = ["M", "T", "W", "Th", "F"]
-  let startOfClass: boolean = false;
   var classRoomsTimes: number[][] = [];
-  let startNewCourseBlock: boolean = false;
   let startingRowIndexForTimes = 2; // it's actually row 3, but they are indexed from 0
   let startingRowIndexForCourseData = 4;
   type colorAndRange = {
@@ -17,12 +17,13 @@ function main(workbook: ExcelScript.Workbook) {
     color: string;
   }
   let roomColorRanges: colorAndRange[] = [];
+  let undersizedClassBuffer = 20;
 
   type room = {
     name: string;
     capacity: number;
     schedule: Map<string, string[][]>; // e.g. schedule["M"] = monday's schedule (which is times that are filled by class names). The two strings of the tuple are the schedule cells themselves (to be filled with data) and the cell color values.
-    colorBlocks: number[][];
+    colorBlocks: number[][]; // Store the color values for classes that take up blocks in the schedule, for use when we draw it on the Calendar sheet to fill in cell color backgrounds
   }
 
   let rooms: room[] = []
@@ -52,13 +53,17 @@ function main(workbook: ExcelScript.Workbook) {
   let uvaClasses: UVAClass[] = [];
   let classData = courses.getRange("A4:O" + rowCount as string).getValues();
 
-  GetDataFromCoursesSheet();
-  CreateRooms();
-  CreateScheduleBasics();
-  FillInManuallyAssignedClasses();
-  AttemptToMakeSchedule();
+  // Start your engines!
 
-  function GetDataFromCoursesSheet() {
+  getDataFromCoursesSheet();
+  createRooms();
+  createScheduleBasics();
+  fillInManuallyAssignedClasses();
+  attemptToMakeSchedule();
+  createRoomSchedule();
+  applyColorsFromColorBlock();
+
+  function getDataFromCoursesSheet() {
     for (let i = 0; i < classData.length; i++) {
       uvaClasses[i] = {
         courseMnemonic: classData[i][0] as string,
@@ -75,7 +80,7 @@ function main(workbook: ExcelScript.Workbook) {
     }
   }
 
-  function CreateRooms() {
+  function createRooms() { 
 
     let roomsRange = roomsSheet.getUsedRange();
     let roomsCount = roomsRange.getRowCount();
@@ -84,7 +89,7 @@ function main(workbook: ExcelScript.Workbook) {
       let thisRoom: room = {
         name: roomsValues[i][0] as string,
         capacity: roomsValues[i][1] as number,
-        schedule: InitializeRoomSchedule(),
+        schedule: initializeRoomSchedule(),
         colorBlocks: []
       }
 
@@ -94,7 +99,7 @@ function main(workbook: ExcelScript.Workbook) {
   }
 
 
-  function InitializeRoomSchedule(): Map<string, string[][]> { // This fills the arrays with empty values so we can put classes in specific indexes of the schedule
+  function initializeRoomSchedule(): Map<string, string[][]> { // This fills the arrays with empty values so we can put classes in specific indexes of the schedule
     let schedule: Map<string, string[][]> = new Map<string, string[][]>();
     let defaultValuesM: string[][] = [];
     let defaultValuesTu: string[][] = [];
@@ -119,7 +124,7 @@ function main(workbook: ExcelScript.Workbook) {
     return schedule;
   }
 
-  function FillInManuallyAssignedClasses() {
+  function fillInManuallyAssignedClasses() { // Fill classes that have aready been assigned
     let timeValues = calendar.getRange("A3:A56").getValues();
     for (let i = 0; i < uvaClasses.length; i++) {
       if (uvaClasses[i].assignedRoom != "") {
@@ -128,7 +133,9 @@ function main(workbook: ExcelScript.Workbook) {
 
         for (let j = timeIndex; j < timeValues.length; j++) {
           if (uvaClasses[i].endTime > timeValues[j][0]) {
-            FillOpenSlot(uvaClasses[i], j, roomIndex, "yes");
+            let isRoomAssigned = "yes";
+            let rowToFill = j;
+            fillOpenSlot(uvaClasses[i], rowToFill, roomIndex, isRoomAssigned);
           }
           else break;
         }
@@ -136,7 +143,7 @@ function main(workbook: ExcelScript.Workbook) {
     }
   }
 
-  function AttemptToMakeSchedule() {
+  function attemptToMakeSchedule() {
 
     let times = calendar.getRange("A3:A56");
     let timeRowCount = times.getRowCount();
@@ -153,22 +160,25 @@ function main(workbook: ExcelScript.Workbook) {
           let wholeCourseDurationOpenOnCalendar = 1; // boolean as number
           var foundRoomIndex: number;
           let courseDuration = 0;
+          let currentRow = j;
 
           for (let k = 0; k < 10; k++) { // we need to check for the whole duration of the course
-            if (cellTimeValues[j + k][0] >= uvaClasses[i].startTime && cellTimeValues[j + k][0] < uvaClasses[i].endTime) {
+            let nextRowChunkToCheck = k;
+            if (cellTimeValues[currentRow + nextRowChunkToCheck][0] >= uvaClasses[i].startTime && cellTimeValues[currentRow + nextRowChunkToCheck][0] < uvaClasses[i].endTime) {
               courseDuration++;
-            }
+            } // If the time row to check is still between the start and end times of the course, we check for it
             else
               break;
           }
 
-          let roomFindAttempt = AttemptToFindOpenSlot(uvaClasses[i], j, courseDuration);
+          let roomFindAttempt /* Tuple */ = attemptToFindOpenSlot(uvaClasses[i], currentRow, courseDuration);
           let isRoomFound = roomFindAttempt[0] == 1 ? true : false;
           let roomFoundIndex = roomFindAttempt[1];
 
           if (isRoomFound) { // if we checked the whole duration and it's open
             for (let k = 0; k < courseDuration; k++) {
-              FillOpenSlot(uvaClasses[i], j + k, roomFoundIndex, "no");
+              let isRoomAlreadyAssigned = "no";
+              fillOpenSlot(uvaClasses[i], currentRow + k, roomFoundIndex, isRoomAlreadyAssigned);
             }
 
           }
@@ -177,18 +187,17 @@ function main(workbook: ExcelScript.Workbook) {
 
     }
 
-    CreateRoomSchedule();
   }
 
 
-  function AttemptToFindOpenSlot(uvaClass: UVAClass, row: number, courseDuration: number): [number, number] {
+  function attemptToFindOpenSlot(uvaClass: UVAClass, row: number, courseDuration: number): [isRoomFoundBooleanAsNumber: number, roomIndex: number] {
 
     let foundSpot = 0; // using number as boolean
     var roomIndex: number;
-    let daysOfWeek: number[] = []; // we capture which days to populate later with color blocks
+    let daysOfWeek: number[] = []; // we capture which days to populate on the sheet
 
-    for (let i = 0; i < rooms.length; i++) {
-      let truthValues: number[] = [];
+    for (let i = 0; i < rooms.length; i++) { // Go  through all rooms, which have been ordered by size, and check for open slots
+      let truthValues: number[] = []; // We collect a bunch of values and then multiply them together at the end-- if a single zero (0) is in the lot, signifying one of the days is full, it is false
       if (rooms[i].capacity >= uvaClass.enrollment) {
 
         foundSpot = 1; // we have a room that could hypothetically hold the class, but we need to check each day
@@ -239,70 +248,74 @@ function main(workbook: ExcelScript.Workbook) {
 
       }
 
-      for (let j = 0; j < truthValues.length; j++) {
-        foundSpot = foundSpot * truthValues[j];
+
+      function checkAllTruthValues() {
+        for (let j = 0; j < truthValues.length; j++) {
+          foundSpot = foundSpot * truthValues[j];
+        }
       }
 
 
-      if (foundSpot == 1) {
+      if (foundSpot == 1) { // If we found a spot, put it in the array for that room's color blocks, and assign the room index for return later
         roomIndex = i;
         for (let j = 0; j < daysOfWeek.length; j++) {
           rooms[roomIndex].colorBlocks.push([row, daysOfWeek[j], courseDuration, uvaClass.rowInDatabase, colorIndex]); // We use this data later to add color to the block
         }     
         break;
       }
-
     }
 
-
     return [foundSpot, roomIndex];
+
   }
-  function GetNumberOfDay(day: string): number {
+
+  function getNumberOfDay(day: string): number {
     if (day == "M") return 0;
     if (day == "T") return 1;
     if (day == "W") return 2;
     if (day == "Th") return 3;
     if (day == "F") return 4;
   }
-  function FillOpenSlot(uvaClass: UVAClass, row: number, foundRoomIndex: number, isRoomAssigned: string) {
-    let courseInfo = uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " {" + uvaClass.rowInDatabase + "}";
 
-    function CheckIfAlreadyAssigned(dayOfWeek: string) {
+  function fillOpenSlot(uvaClass: UVAClass, row: number, foundRoomIndex: number, isRoomAssigned: string) {
+    let courseInfo = uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " [" + uvaClass.enrollment + "] " + " {" + uvaClass.rowInDatabase + "}";
+
+    function checkIfAlreadyAssigned(dayOfWeek: string) {// If we assigned two or more classes to the same room at the same time
       if (rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0] != "") {
         throw "You may have assigned this class: " + uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " " + uvaClass.rowInDatabase + " to the same room at the same time as this class: " + rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0];
       }
     }
 
-    function AssignScheduleValues(dayOfWeek: string) {
+    function assignScheduleValues(dayOfWeek: string) {
       rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0] = courseInfo;
       rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].push(isRoomAssigned);
     }
 
     if (uvaClass.day.includes("M")) {
-      CheckIfAlreadyAssigned("M");
-      AssignScheduleValues("M");
+      checkIfAlreadyAssigned("M");
+      assignScheduleValues("M");
     }
     if (uvaClass.day == "TuTh" || uvaClass.day == "T") {
-      CheckIfAlreadyAssigned("T");
-      AssignScheduleValues("T");
+      checkIfAlreadyAssigned("T");
+      assignScheduleValues("T");
     }
 
     if (uvaClass.day.includes("W")) {
-      CheckIfAlreadyAssigned("W");
-      AssignScheduleValues("W");
+      checkIfAlreadyAssigned("W");
+      assignScheduleValues("W");
     }
     if (uvaClass.day.includes("Th")) {
-      CheckIfAlreadyAssigned("Th");
-      AssignScheduleValues("Th");
+      checkIfAlreadyAssigned("Th");
+      assignScheduleValues("Th");
     }
     if (uvaClass.day.includes("F")) {
-      CheckIfAlreadyAssigned("F");
-      AssignScheduleValues("F");
+      checkIfAlreadyAssigned("F");
+      assignScheduleValues("F");
     }
 
   }
 
-  function CreateScheduleBasics() { // Fills out the times 
+  function createScheduleBasics() { // Fills out the times 
     entireSheet.clear();
     let hour = 8;
     let mod = 0;
@@ -325,10 +338,9 @@ function main(workbook: ExcelScript.Workbook) {
     }
   }
 
-  function CreateRoomSchedule() { // Fills in the classes in rooms
+  function createRoomSchedule() { // Fills in the classes in rooms
 
-    let spacer = 6;
-
+    let spacer = 6; // 5 days + 1 column white space
 
     for (let i = 0; i < rooms.length; i++) {
       let roomNameCell = entireSheet.getCell(0, (i * spacer) + 1); // Get every 7th cell, staring in the 2nd column
@@ -347,61 +359,32 @@ function main(workbook: ExcelScript.Workbook) {
         let targetRange = targetCell.getResizedRange(rooms[i].schedule.get(dayChar).length - 1, 0);
 
         targetRange.setValues(courseScheduleData);
+
         setRoomAssignedColor();
+        let courseInfo = rooms[i].schedule.get(dayChar);
+        let classEnrollment = courseInfo.sli
+        setColorsOfRoomsThatAreUndersized
 
         function setRoomAssignedColor() {
           for (let k = 0; k < rooms[i].schedule.get(dayChar).length - 1; k++) {
             let isAssigned = rooms[i].schedule.get(dayChar)[k][1] == "yes" ? true : false;
             if (isAssigned) {
               let coloredCell = entireSheet.getCell(k + startingRowIndexForTimes, (i * spacer) + spacerValue);
-              coloredCell.getFormat().getFill().setColor("red");
+              coloredCell.getFormat().getFill().setColor(assignedRoomColor);
             }
           }
         }
 
-
-        for (let j = 0; j < rooms[i].colorBlocks.length; j++) {
-          let blocksToBeColored = rooms[i].colorBlocks;
-          blocksToBeColored.sort((a, b) => (a[0] < b[0]) ? -1 : 1); // sort them by row
-          let startRow = blocksToBeColored[j][0] + startingRowIndexForTimes;
-          let startColumn = blocksToBeColored[j][1] + 1;
-          let rowsInRange = blocksToBeColored[j][2];
-          
-          for (let k = j; k >= 0; k--) { // switch colors for new classes
-            if (blocksToBeColored[j][1] == blocksToBeColored[k][1] && 
-              blocksToBeColored[j][3] != blocksToBeColored[k][3]) { // if it's in the same column, but a different class ID
-              blocksToBeColored[j][4] = blocksToBeColored[k][4] == 2 ? 0 : blocksToBeColored[k][4] == 1 ? 2 : 1; // set it to next color
-              break;
-            }
-          }
-          
-
-          let colorIndex = blocksToBeColored[j][4];
-          var classColor: string;
-
-          if (blocksToBeColored[j][1] == 0 || blocksToBeColored[j][1] == 2 || blocksToBeColored[j][1] == 4)
-            classColor = mwfColors[colorIndex];// different colors for MWF TuTh
-          else classColor = tthColors[colorIndex]
-
-          let colorRange = calendar.getRangeByIndexes(startRow, startColumn + (i * spacer), rowsInRange, 1);
-
-          roomColorRanges.push({ range: colorRange, color: classColor });
-
-          for (let k = j; k >= 0; k--) { // if we switched colors on the last day of a class, make every day of that class that color
-            if (blocksToBeColored[j][3] == blocksToBeColored[k][3]) { // check for same class
-              blocksToBeColored[k][4] = blocksToBeColored[j][4]; // make sure they are all the same color in the array
-              let amendedColorRange = calendar.getRangeByIndexes(blocksToBeColored[k][0] + startingRowIndexForTimes, blocksToBeColored[k][1] + (i * spacer) + 1, blocksToBeColored[k][2], 1);
-              if (blocksToBeColored[k][1] == 0 || blocksToBeColored[k][1] == 2 || blocksToBeColored[k][1] == 4)
-                classColor = mwfColors[colorIndex];// different colors for MWF TuTh
-              else classColor = tthColors[colorIndex]
-              roomColorRanges.push({ range: amendedColorRange, color: classColor });
-            }
-          }
-
+        function setColorsOfRoomsThatAreUndersized(classEnrollment: number) : boolean {
+          if (rooms[i].capacity > classEnrollment + undersizedClassBuffer)
+          {
+            return true;
+          } else return false;
         }
-
 
       }
+
+      setColorsFromColorBlocksBasedOnSpacing();
 
       makeColumn(1, "Monday", "M");
       makeColumn(2, "Tuesday", "T");
@@ -409,16 +392,75 @@ function main(workbook: ExcelScript.Workbook) {
       makeColumn(4, "Thursday", "Th");
       makeColumn(5, "Friday", "F");
 
+        
+      function setColorsFromColorBlocksBasedOnSpacing() {
+        for (let j = 0; j < rooms[i].colorBlocks.length; j++) {
+          let blocksToBeColored = rooms[i].colorBlocks;
+          blocksToBeColored.sort((a, b) => (a[0] < b[0]) ? -1 : 1); // sort them by row
+          let startRow = blocksToBeColored[j][0] + startingRowIndexForTimes;
+          let startColumn = blocksToBeColored[j][1] + 1; // One because first column in sheet is times
+          let rowsInRange = blocksToBeColored[j][2];
+          
+          for (let k = j; k >= 0; k--) { // switch colors for new classes
+            let currentColumn = blocksToBeColored[j][1];
+            let columnToCheckAgainst = blocksToBeColored[k][1]
+            let currentClassRowID = blocksToBeColored[j][3];
+            let classRowIDToCheckAgainst = blocksToBeColored[k][3];
+            let currentBlockColor = blocksToBeColored[j][4];
+            let blockColorToCheckAgainst = blocksToBeColored[k][4];
+            if (currentColumn == columnToCheckAgainst && 
+              currentClassRowID != classRowIDToCheckAgainst) { // if it's in the same column, but a different class ID
+              currentBlockColor = blockColorToCheckAgainst == 2 ? 0 : blockColorToCheckAgainst == 1 ? 2 : 1; // set it to next color
+              break;
+            }
+          }
+
+          let colorIndex = blocksToBeColored[j][4];
+          var classColor: string;
+
+          let dayOfWeekBasedOnColumnNumber = blocksToBeColored[j][1];
+          if (dayOfWeekBasedOnColumnNumber == 0 || dayOfWeekBasedOnColumnNumber == 2 || dayOfWeekBasedOnColumnNumber == 4)
+            classColor = mwfColors[colorIndex];// different colors for MWF TuTh
+          else classColor = tthColors[colorIndex]
+
+          let colorRange = calendar.getRangeByIndexes(startRow, startColumn + (i * spacer), rowsInRange, 1);
+
+          roomColorRanges.push({ range: colorRange, color: classColor });
+
+          for (let k = j; k >= 0; k--) { // if we switched colors on the last day of a class (because it had a class above it), go back and make every day of that class that color
+            let currentClassRowID = blocksToBeColored[j][3];
+            let classRowIDToCheckAgainst = blocksToBeColored[k][3];
+            if (currentClassRowID == classRowIDToCheckAgainst) { // check for same class
+              blocksToBeColored[k][4] = blocksToBeColored[j][4]; // make sure they are all the same color in the array
+              // Set the range based on the previous class locations in the array
+              let previousClassColorBlockRow = blocksToBeColored[k][0] + startingRowIndexForTimes;
+              let previousClassColorBlockColumn = blocksToBeColored[k][1]; 
+              let previousClassColorBlockColumnInSheet = blocksToBeColored[k][1] + (i * spacer) + 1; 
+              let previousClassColorBlockDuration = blocksToBeColored[k][2];
+              let amendedColorRange = calendar.getRangeByIndexes(previousClassColorBlockRow, previousClassColorBlockColumnInSheet, previousClassColorBlockDuration, 1);
+              // And set the colors based on day
+              if (previousClassColorBlockColumn == 0 || previousClassColorBlockColumn == 2 || previousClassColorBlockColumn == 4)
+                classColor = mwfColors[colorIndex];// different colors for MWF TuTh
+              else classColor = tthColors[colorIndex]
+
+              roomColorRanges.push({ range: amendedColorRange, color: classColor });
+            }
+          }
+        }
+      }
 
 
     }
 
   }
-  console.log("adding colors");
 
-  for (let i = 0; i < roomColorRanges.length; i++) {
-    let color = roomColorRanges[i].color;
-    roomColorRanges[i].range.getFormat().getFill().setColor(color);
+  function applyColorsFromColorBlock() {
+    console.log("adding colors"); // This clears the memory buffer
+
+    for (let i = 0; i < roomColorRanges.length; i++) {
+      let color = roomColorRanges[i].color;
+      roomColorRanges[i].range.getFormat().getFill().setColor(color);
+    }
   }
 
 }

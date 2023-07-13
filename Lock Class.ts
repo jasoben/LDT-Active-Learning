@@ -8,7 +8,8 @@ function main(workbook: ExcelScript.Workbook) {
     let courses = workbook.getWorksheet("Courses");
     let setRoomName: string = "";
     var roomStartColumn: number;
-    let roomColor: string = "red";
+    let roomColor: string = "green";
+    var rowNumber: number;
 
     getRoomNameForCurrentlySelectedClassCell();
     setRoomInCoursesSheet();
@@ -28,7 +29,7 @@ function main(workbook: ExcelScript.Workbook) {
 
     function setRoomInCoursesSheet() {
       let cellValue = cell.getValue().toString();
-      let rowNumber: number = +cellValue.slice(cellValue.indexOf("{") + 1, cellValue.indexOf("}")); // The row is listed on the Calendar sheet between {}
+      rowNumber = +cellValue.slice(cellValue.indexOf("{") + 1, cellValue.indexOf("}")); // The row is listed on the Calendar sheet between {}
       let roomRange = courses.getRange("M1:M1000").getUsedRange();
       
       roomRange.getCell(rowNumber - 1, 0).setValue(setRoomName);

@@ -2,11 +2,13 @@ function main(workbook: ExcelScript.Workbook) {
 
   let cellHasValue: number[][] = [];
   let cellValue: string[] = [];
-  let mwfColors: string[] = ["b4f2ac", "dfe8ae", "fce4d6"];
-  let tthColors: string[] = ["b2bded", "adf0dd", "e9c6f7"];
   let undersizedClassColor: string = "blue";
+  let mwfColors: string[] = ["b4f2ac", "dfe8ae", "fce4d6", undersizedClassColor];
+  let tthColors: string[] = ["b2bded", "adf0dd", "e9c6f7", undersizedClassColor];
   let assignedRoomColor = "green";
+  let assignedAndUnderSizedColor = "red";
   let colorIndex = 0;
+  let colorsApplied = false;
   let roomHeadings: string[][] = [];
   let days: string[] = ["M", "T", "W", "Th", "F"]
   var classRoomsTimes: number[][] = [];
@@ -17,7 +19,7 @@ function main(workbook: ExcelScript.Workbook) {
     color: string;
   }
   let roomColorRanges: colorAndRange[] = [];
-  let undersizedClassBuffer = 20;
+  let undersizedClassBuffer = 10;
 
   type room = {
     name: string;
@@ -62,6 +64,7 @@ function main(workbook: ExcelScript.Workbook) {
   attemptToMakeSchedule();
   createRoomSchedule();
   applyColorsFromColorBlock();
+
 
   function getDataFromCoursesSheet() {
     for (let i = 0; i < classData.length; i++) {
@@ -134,8 +137,12 @@ function main(workbook: ExcelScript.Workbook) {
         for (let j = timeIndex; j < timeValues.length; j++) {
           if (uvaClasses[i].endTime > timeValues[j][0]) {
             let isRoomAssigned = "yes";
+            let isRoomAssignedAndClassUndersized = "both";
             let rowToFill = j;
-            fillOpenSlot(uvaClasses[i], rowToFill, roomIndex, isRoomAssigned);
+            if (uvaClasses[i].enrollment + undersizedClassBuffer < rooms[roomIndex].capacity) {
+              fillOpenSlot(uvaClasses[i], rowToFill, roomIndex, isRoomAssignedAndClassUndersized);
+            }
+            else fillOpenSlot(uvaClasses[i], rowToFill, roomIndex, isRoomAssigned);
           }
           else break;
         }
@@ -190,7 +197,7 @@ function main(workbook: ExcelScript.Workbook) {
   }
 
 
-  function attemptToFindOpenSlot(uvaClass: UVAClass, row: number, courseDuration: number): [isRoomFoundBooleanAsNumber: number, roomIndex: number] {
+  function attemptToFindOpenSlot(uvaClass: UVAClass, row: number, courseDuration: number): [number, number] {
 
     let foundSpot = 0; // using number as boolean
     var roomIndex: number;
@@ -248,6 +255,7 @@ function main(workbook: ExcelScript.Workbook) {
 
       }
 
+      checkAllTruthValues();
 
       function checkAllTruthValues() {
         for (let j = 0; j < truthValues.length; j++) {
@@ -259,7 +267,11 @@ function main(workbook: ExcelScript.Workbook) {
       if (foundSpot == 1) { // If we found a spot, put it in the array for that room's color blocks, and assign the room index for return later
         roomIndex = i;
         for (let j = 0; j < daysOfWeek.length; j++) {
-          rooms[roomIndex].colorBlocks.push([row, daysOfWeek[j], courseDuration, uvaClass.rowInDatabase, colorIndex]); // We use this data later to add color to the block
+          if (uvaClass.enrollment + undersizedClassBuffer < rooms[roomIndex].capacity) {
+            rooms[roomIndex].colorBlocks.push([row, daysOfWeek[j], courseDuration, uvaClass.rowInDatabase, 3]); // the color in index 3 is the color for undersized classes
+          }
+          else 
+            rooms[roomIndex].colorBlocks.push([row, daysOfWeek[j], courseDuration, uvaClass.rowInDatabase, colorIndex]); // We use this data later to add color to the block
         }     
         break;
       }
@@ -341,9 +353,9 @@ function main(workbook: ExcelScript.Workbook) {
   function createRoomSchedule() { // Fills in the classes in rooms
 
     let spacer = 6; // 5 days + 1 column white space
-
+    console.log("filling schedule");
     for (let i = 0; i < rooms.length; i++) {
-      let roomNameCell = entireSheet.getCell(0, (i * spacer) + 1); // Get every 7th cell, staring in the 2nd column
+      let roomNameCell = calendar.getCell(0, (i * spacer) + 1); // Get every 7th cell, staring in the 2nd column
       roomNameCell.setValue(rooms[i].name);
       roomNameCell.getFormat().getFont().setBold(true);
 
@@ -361,26 +373,23 @@ function main(workbook: ExcelScript.Workbook) {
         targetRange.setValues(courseScheduleData);
 
         setRoomAssignedColor();
-        let courseInfo = rooms[i].schedule.get(dayChar);
-        let classEnrollment = courseInfo.sli
-        setColorsOfRoomsThatAreUndersized
+        //setColorsOfRoomsThatAreUndersized();
 
         function setRoomAssignedColor() {
           for (let k = 0; k < rooms[i].schedule.get(dayChar).length - 1; k++) {
             let isAssigned = rooms[i].schedule.get(dayChar)[k][1] == "yes" ? true : false;
+            let isAssignedAndClassUndersized = rooms[i].schedule.get(dayChar)[k][1] == "both" ? true : false;
             if (isAssigned) {
               let coloredCell = entireSheet.getCell(k + startingRowIndexForTimes, (i * spacer) + spacerValue);
               coloredCell.getFormat().getFill().setColor(assignedRoomColor);
             }
+            else if (isAssignedAndClassUndersized) {
+              let coloredCell = entireSheet.getCell(k + startingRowIndexForTimes, (i * spacer) + spacerValue);
+              coloredCell.getFormat().getFill().setColor(assignedAndUnderSizedColor);
+            }
           }
         }
-
-        function setColorsOfRoomsThatAreUndersized(classEnrollment: number) : boolean {
-          if (rooms[i].capacity > classEnrollment + undersizedClassBuffer)
-          {
-            return true;
-          } else return false;
-        }
+          
 
       }
 
@@ -410,7 +419,23 @@ function main(workbook: ExcelScript.Workbook) {
             let blockColorToCheckAgainst = blocksToBeColored[k][4];
             if (currentColumn == columnToCheckAgainst && 
               currentClassRowID != classRowIDToCheckAgainst) { // if it's in the same column, but a different class ID
-              currentBlockColor = blockColorToCheckAgainst == 2 ? 0 : blockColorToCheckAgainst == 1 ? 2 : 1; // set it to next color
+              
+              switch(blockColorToCheckAgainst) {
+                case 2: 
+                  currentBlockColor = 0;
+                  break;
+                case 1: 
+                  currentBlockColor = 2;
+                  break;
+                case 0: 
+                  currentBlockColor = 1;
+                  break;
+                case 3:
+                  currentBlockColor = 3;
+                  break;
+              }
+             
+              blocksToBeColored[j][4] = currentBlockColor;
               break;
             }
           }
@@ -449,6 +474,8 @@ function main(workbook: ExcelScript.Workbook) {
         }
       }
 
+      
+
 
     }
 
@@ -462,6 +489,7 @@ function main(workbook: ExcelScript.Workbook) {
       roomColorRanges[i].range.getFormat().getFill().setColor(color);
     }
   }
+  
 
 }
 

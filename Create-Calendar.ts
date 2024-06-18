@@ -155,7 +155,7 @@ function main(workbook: ExcelScript.Workbook) {
   }
 
   function fillInManuallyAssignedClasses() { // Fill classes that have aready been assigned
-    let timeValues = calendar.getRange("A3:A56").getValues();
+    let timeValues = calendar.getRange("A3:A56").getValues(); // The time values we are working with, generally from 8:00AM to 9:00PM
     for (let i = 0; i < uvaClasses.length; i++) {
       // If the room has been assigned, we find that room in our rooms array and the start time in our timeValues array, 
       // then fill the slot in our rooms.schedule array, noting the special colors for "locked" or assigned rooms
@@ -164,8 +164,9 @@ function main(workbook: ExcelScript.Workbook) {
 
         let timeIndex = timeValues.findIndex(time => time[0] == uvaClasses[i].startTime);
 
-        for (let j = timeIndex; j < timeValues.length; j++) {
-          if (uvaClasses[i].endTime > timeValues[j][0]) {
+        for (let j = timeIndex; j < timeValues.length; j++) { // Search from the timeIndex (the index row value of the startTime)
+                                                              // through to the end of the time values
+          if (uvaClasses[i].endTime > timeValues[j][0]) { // we don't do anything past the endTime of the class
             // These values "manual-yes" and "manual-both" are read later when we are filling in colors
             let isRoomManuallyAssigned = "manual-yes";
             let isRoomManuallyAssignedAndClassUndersized = "manual-both";
@@ -256,7 +257,7 @@ function main(workbook: ExcelScript.Workbook) {
         for (let j = 0; j < courseDuration; j++) { // we need to check the whole duration; again, duration is slots, not actual times, which this array doesn't 
           // know nor care about
           if (uvaClass.day.includes("M")) {
-            if (rooms[i].schedule.get("M")[row + j][0] == "") {
+            if (rooms[i].schedule.get("M")[row + j].classData == "") {
               truthValues.push(1);
               if (!daysOfWeek.includes(0)) // If the array doesn't already contain 0 (signifying Monday as the 0 column in the chart), put in 0
                 daysOfWeek.push(0);
@@ -265,7 +266,7 @@ function main(workbook: ExcelScript.Workbook) {
           }
           if (uvaClass.day.includes("T")) {
 
-            if (rooms[i].schedule.get("T")[row + j][0] == "") {
+            if (rooms[i].schedule.get("T")[row + j].classData == "") {
               truthValues.push(1);
               if (!daysOfWeek.includes(1))
                 daysOfWeek.push(1);
@@ -273,7 +274,7 @@ function main(workbook: ExcelScript.Workbook) {
             else truthValues.push(0);
           }
           if (uvaClass.day.includes("W")) {
-            if (rooms[i].schedule.get("W")[row + j][0] == "") {
+            if (rooms[i].schedule.get("W")[row + j].classData == "") {
               truthValues.push(1);
               if (!daysOfWeek.includes(2))
                 daysOfWeek.push(2);
@@ -281,7 +282,7 @@ function main(workbook: ExcelScript.Workbook) {
             else truthValues.push(0);
           }
           if (uvaClass.day.includes("R")) {
-            if (rooms[i].schedule.get("R")[row + j][0] == "") {
+            if (rooms[i].schedule.get("R")[row + j].classData == "") {
               truthValues.push(1);
               if (!daysOfWeek.includes(3))
                 daysOfWeek.push(3);
@@ -289,7 +290,7 @@ function main(workbook: ExcelScript.Workbook) {
             else truthValues.push(0);
           }
           if (uvaClass.day.includes("F")) {
-            if (rooms[i].schedule.get("F")[row + j][0] == "") {
+            if (rooms[i].schedule.get("F")[row + j].classData == "") {
               truthValues.push(1);
               if (!daysOfWeek.includes(4))
                 daysOfWeek.push(4);

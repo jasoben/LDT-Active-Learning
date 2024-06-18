@@ -7,9 +7,9 @@ function main(workbook: ExcelScript.Workbook) {
   type room = {
     name: string;
     capacity: number;
-    schedule: Map<string, string[][]>; // e.g. schedule["M"] = monday's schedule (which is times that are filled by class names). The two strings of the tuple are the schedule cells themselves (to be filled with data) and the cell color values.
+    schedule: Map<string, classAndColor[]>; // e.g. schedule["M"] = monday's schedule (which is times that are filled by class names). The two strings of the tuple are the schedule cells themselves (to be filled with data) and the cell color values.
     colorBlocks: number[][]; // Store the color values for classes that take up blocks in the schedule, for use when we draw it on the Calendar sheet to fill in cell color backgrounds
-  }  
+  }
   let rooms: room[] = []
 
   // Worksheets
@@ -38,20 +38,21 @@ function main(workbook: ExcelScript.Workbook) {
   let rowCount = usedRange.getRowCount();
   let uvaClasses: UVAClass[] = [];
 
-    //Find out where the data starts on the "courses" sheet
-    let startingRowIndexForCourseData : number = 0;
-    let textValues = courses.getRange("A1:A10").getValues()
-    for (let i = 0; i < textValues.length ; i++) {
-      if (textValues[i][0] == "Mnemonic") {
-        startingRowIndexForCourseData = i + 1;
-      }
+  //Find out where the data starts on the "courses" sheet; since the first column is "Mnemonic", we look for that word 
+  //in the cell and know that is the header row, so the data starts one row below that
+  let startingRowIndexForCourseData: number = 0;
+  let textValues = courses.getRange("A1:A10").getValues()
+  for (let i = 0; i < textValues.length; i++) {
+    if (textValues[i][0] == "Mnemonic") {
+      startingRowIndexForCourseData = i + 1;
     }
-    let startingRowNumberForCourseData = startingRowIndexForCourseData + 1;
-    let classData = courses.getRange("A" + startingRowNumberForCourseData as string + ":O" + rowCount as string).getValues();
+  }
+  let startingRowNumberForCourseData = startingRowIndexForCourseData + 1; // The row number is plus one since the index is zero indexed
+  let classData = courses.getRange("A" + startingRowNumberForCourseData as string + ":O" + rowCount as string).getValues();
 
   // Undersized classes
   let undersizedClassColor: string = "yellow"; // When courses get placed in rooms that are too large (based on the undersizedClassBuffer, below) we mark them this color
-  let undersizedClassBuffer = .67; // See above
+  let undersizedClassBuffer = .67; // Classes with enrollment that are less than this fraction of the room size are undersized
 
   // Coloring the chart
   let mwfColors: string[] = ["b4f2ac", "dfe8ae", "fce4d6", undersizedClassColor]; // The color blocks we use for MWF classes-- for ease of reading the chart
@@ -61,11 +62,17 @@ function main(workbook: ExcelScript.Workbook) {
   let assignedAndUnderSizedColor = "red"; // Color for when it is "locked" or assigned, and undersized (possibly redundant)
   let manuallyAssignedRoomColor = "green" // Color for when we have "locked" or assigned a room (possibly redundant)
   let manuallyAssignedUndersizedRoomColor = "6161FE" // Color for when it is "locked" or assigned, and undersized (possibly redundant)
+  let conflictColor = "red" // Color for when it is "locked" or assigned, and undersized (possibly redundant)
   type colorAndRange = {
     range: ExcelScript.Range;
     color: string;
   } // This is how we store "color blocks" that we then fill in later. 
   let roomColorRanges: colorAndRange[] = []; // The array that stores the colorAndRange types
+
+  type classAndColor = {
+    classData: string;
+    color: string;
+  }
 
 
   // Start your engines!
@@ -115,20 +122,27 @@ function main(workbook: ExcelScript.Workbook) {
   }
 
 
-  function initializeRoomSchedule(): Map<string, string[][]> { // This fills the arrays with empty values so we can put classes in specific indexes of the schedule
-    let schedule: Map<string, string[][]> = new Map<string, string[][]>();
-    let defaultValuesM: string[][] = [];
-    let defaultValuesTu: string[][] = [];
-    let defaultValuesW: string[][] = [];
-    let defaultValuesR: string[][] = [];
-    let defaultValuesF: string[][] = [];
+  function initializeRoomSchedule(): Map<string, classAndColor[]> { // This fills the arrays with empty values so we can put classes in specific indexes of the schedule
+    let schedule: Map<string, classAndColor[]> = new Map<string, classAndColor[]>(); // Where the first string is day of the week, and then the 
+      //class data per cell and color data per cell
+    let defaultValuesM: classAndColor[] = [];
+    let defaultValuesTu: classAndColor[] = [];
+    let defaultValuesW: classAndColor[] = [];
+    let defaultValuesR: classAndColor[] = [];
+    let defaultValuesF: classAndColor[] = [];
 
     for (let i = 0; i < 53; i++) {
-      defaultValuesM[i] = [""];
-      defaultValuesTu[i] = [""];
-      defaultValuesW[i] = [""];
-      defaultValuesR[i] = [""];
-      defaultValuesF[i] = [""];
+      defaultValuesM[i].classData = "";
+      defaultValuesTu[i].classData = "";
+      defaultValuesW[i].classData = "";
+      defaultValuesR[i].classData = "";
+      defaultValuesF[i].classData = "";
+
+      defaultValuesM[i].color = "";
+      defaultValuesTu[i].color = "";
+      defaultValuesW[i].color = "";
+      defaultValuesR[i].color = "";
+      defaultValuesF[i].color = "";
     }
 
     schedule.set("M", defaultValuesM);
@@ -200,16 +214,16 @@ function main(workbook: ExcelScript.Workbook) {
           }
 
           let roomFindAttempt /* Tuple */ = attemptToFindOpenSlot(uvaClasses[i], currentRow, courseDuration);  // We send the row and duration data to this function
-            // which tries to then check against the rooms.schedule arrays in our rooms array; we don't want to send the raw time values because these
-            // are meaningless to the array, which only cares about index values
+          // which tries to then check against the rooms.schedule arrays in our rooms array; we don't want to send the raw time values because these
+          // are meaningless to the array, which only cares about index values
           let isRoomFound = roomFindAttempt[0] == 1 ? true : false; // Since the function returns a tuple, we look at the first value of the tuple; 
-            // if we succeeded, then we found a room
+          // if we succeeded, then we found a room
           let roomFoundIndex = roomFindAttempt[1]; // The second value of the tuple is the index of the room in the rooms array
 
           if (isRoomFound) { // if we checked the whole duration and it's open
             for (let k = 0; k < courseDuration; k++) {
               let isRoomAlreadyAssigned = "no"; // This value is for manual assignment; it may seem counterintuitive that we are "filling" a slot and saying 
-                // it hasn't been assigned, but this is to track whether it was manually assigned (i.e. "locked") or not
+              // it hasn't been assigned, but this is to track whether it was manually assigned (i.e. "locked") or not
               fillOpenSlot(uvaClasses[i], currentRow + k, roomFoundIndex, isRoomAlreadyAssigned);
             }
 
@@ -226,7 +240,7 @@ function main(workbook: ExcelScript.Workbook) {
   function attemptToFindOpenSlot(uvaClass: UVAClass, row: number, courseDuration: number): [number, number] {
 
     let foundSpot = 0; // using number as boolean since we check all days; if MW are 1 and F is zero, then MWF is zero since they are multiplied at the end; 
-      // this way we can check all days to verify the whole schedule is open
+    // this way we can check all days to verify the whole schedule is open
     var roomIndex: number;
     let daysOfWeek: number[] = []; // we capture which days to populate on the sheet; this array let's us know which days we're dealing with for this course
 
@@ -240,16 +254,16 @@ function main(workbook: ExcelScript.Workbook) {
         // Within those are arrays for the slots; importantly, the rooms.schedules don't know or care about times, they only care about slots; 
         // times are handled in attemptToMakeSchedule function and converted to index values to check slots in these arrays
         for (let j = 0; j < courseDuration; j++) { // we need to check the whole duration; again, duration is slots, not actual times, which this array doesn't 
-            // know nor care about
+          // know nor care about
           if (uvaClass.day.includes("M")) {
-            if (rooms[i].schedule.get("M")[row + j][0] == "") { 
+            if (rooms[i].schedule.get("M")[row + j][0] == "") {
               truthValues.push(1);
               if (!daysOfWeek.includes(0)) // If the array doesn't already contain 0 (signifying Monday as the 0 column in the chart), put in 0
                 daysOfWeek.push(0);
             }
             else truthValues.push(0);
           }
-          if (uvaClass.day.includes("T")) { 
+          if (uvaClass.day.includes("T")) {
 
             if (rooms[i].schedule.get("T")[row + j][0] == "") {
               truthValues.push(1);
@@ -319,7 +333,9 @@ function main(workbook: ExcelScript.Workbook) {
 
     function checkIfAlreadyAssigned(dayOfWeek: string) {// If we assigned two or more classes to the same room at the same time
       if (rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0] != "") {
-        throw "You may have assigned this class: " + uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " " + uvaClass.rowInDatabase + " to the same room at the same time as this class: " + rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0];
+        let currentInfoInRoom = rooms[foundRoomIndex].schedule.get(dayOfWeek)[row][0];
+        courseInfo = currentInfoInRoom + " /-/ " + courseInfo;
+        console.log("assigned");
       }
     }
 
@@ -414,6 +430,7 @@ function main(workbook: ExcelScript.Workbook) {
             let isAssignedAndClassUndersized = rooms[i].schedule.get(dayChar)[k][1] == "both" ? true : false;
             let isManuallyAssigned = rooms[i].schedule.get(dayChar)[k][1] == "manual-yes" ? true : false;
             let isManuallyAssignedAndUndersized = rooms[i].schedule.get(dayChar)[k][1] == "manual-both" ? true : false;
+            let hasConflict = rooms[i].schedule.get(dayChar)[k][0].search("/-/") > 0 ? true : false; 
             if (isAssigned) {
               let coloredCell = entireSheet.getCell(k + startingRowIndexForTimes, (i * spacer) + spacerValue);
               coloredCell.getFormat().getFill().setColor(assignedRoomColor);
@@ -429,6 +446,10 @@ function main(workbook: ExcelScript.Workbook) {
             else if (isManuallyAssignedAndUndersized) {
               let coloredCell = entireSheet.getCell(k + startingRowIndexForTimes, (i * spacer) + spacerValue);
               coloredCell.getFormat().getFill().setColor(manuallyAssignedUndersizedRoomColor);
+            }
+            if (hasConflict) {
+              let coloredCell = entireSheet.getCell(k + startingRowIndexForTimes, (i * spacer) + spacerValue);
+              coloredCell.getFormat().getFill().setColor(conflictColor);
             }
           }
         }

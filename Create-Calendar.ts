@@ -2,6 +2,7 @@ function main(workbook: ExcelScript.Workbook) {
 
   // Values for times and days
   let startingRowIndexForTimes = 2; // Which row is 800AM on in the chart? (It's actually row 3, but they are indexed from 0)
+  let numberOfRowsInCalendarSheet: number = 53 // The row count for 8:00AM - 9:00PM. 
 
   // Rooms
   type room = {
@@ -69,9 +70,10 @@ function main(workbook: ExcelScript.Workbook) {
   } // This is how we store "color blocks" that we then fill in later. 
   let roomColorRanges: colorAndRange[] = []; // The array that stores the colorAndRange types
 
+  // We store the class data and its color value (for populating the calendar and making it readable)
   type classAndColor = {
     classData: string;
-    colorIndex: number;
+    colorData: string;
   }
 
 
@@ -81,7 +83,7 @@ function main(workbook: ExcelScript.Workbook) {
   createRooms(); // Create the rooms data
   createScheduleBasics(); // Create the schedule to be filled
   fillInManuallyAssignedClasses(); // Fill in any classes we have already "locked" or assigned
-  attemptToMakeSchedule(); // Attempt to fill in courses into the schedule based on size, availability, etc.
+  MakeTempSchedule(); // Attempt to fill in courses into the schedule based on size, availability, etc.
   createRoomSchedule(); // Create the schedule for each room based on the above schedule
   applyColorsFromColorBlock(); // Assign the colors to the resulting chart on the "calendar" sheet
 
@@ -103,8 +105,8 @@ function main(workbook: ExcelScript.Workbook) {
     }
   }
 
+  // This creates the header for the rooms in the calendar sheet
   function createRooms() {
-
     let roomsRange = roomsSheet.getUsedRange();
     let roomsCount = roomsRange.getRowCount();
     let roomsValues = roomsRange.getValues();
@@ -121,26 +123,29 @@ function main(workbook: ExcelScript.Workbook) {
     rooms.sort((a, b) => (a.capacity < b.capacity) ? -1 : 1); // We sort by capacity because we fill from smallest to largest
   }
 
-
-  function initializeRoomSchedule(): Map<string, classAndColor[]> { // This fills the arrays with empty values so we can put classes in specific indexes of the schedule
+// This fills the arrays with empty values so we can put classes in specific indexes of the schedule
+// We build one of these for each room, using a Map with the five days of the week, and a 
+// number of rows equal to the rows in the calendar sheet (53) for 8:00AM - 9:00PM
+// This schedule will be filled in with class data prior to actually putting it on the sheet in the final step.
+  function initializeRoomSchedule(): Map<string, classAndColor[]> { 
     let schedule: Map<string, classAndColor[]> = new Map<string, classAndColor[]>(); // Where the first string is day of the week, and then the 
       //class data per cell and color data per cell
     let defaultValuesM: classAndColor[] = [];
-    let defaultValuesTu: classAndColor[] = [];
+    let defaultValuesT: classAndColor[] = [];
     let defaultValuesW: classAndColor[] = [];
     let defaultValuesR: classAndColor[] = [];
     let defaultValuesF: classAndColor[] = [];
 
-    for (let i = 0; i < 53; i++) {
+    for (let i = 0; i < numberOfRowsInCalendarSheet; i++) {
       defaultValuesM[i].classData = "";
-      defaultValuesTu[i].classData = "";
+      defaultValuesT[i].classData = "";
       defaultValuesW[i].classData = "";
       defaultValuesR[i].classData = "";
       defaultValuesF[i].classData = "";
     }
 
     schedule.set("M", defaultValuesM);
-    schedule.set("T", defaultValuesTu);
+    schedule.set("T", defaultValuesT);
     schedule.set("W", defaultValuesW);
     schedule.set("R", defaultValuesR);
     schedule.set("F", defaultValuesF);
@@ -148,36 +153,41 @@ function main(workbook: ExcelScript.Workbook) {
     return schedule;
   }
 
-  function fillInManuallyAssignedClasses() { // Fill classes that have aready been assigned
+// Fill classes that have aready been assigned
+  function fillInManuallyAssignedClasses() { 
     let timeValues = calendar.getRange("A3:A56").getValues(); // The time values we are working with, generally from 8:00AM to 9:00PM
     for (let i = 0; i < uvaClasses.length; i++) {
       // If the room has been assigned, we find that room in our rooms array and the start time in our timeValues array, 
       // then fill the slot in our rooms.schedule array, noting the special colors for "locked" or assigned rooms
       if (uvaClasses[i].assignedRoom != "") {
+        // Find which room it has been assigned to
         let roomIndex = rooms.findIndex(room => room.name == uvaClasses[i].assignedRoom);
 
+        // Find the index of the timeValues that coresponds to when the class starts
         let timeIndex = timeValues.findIndex(time => time[0] == uvaClasses[i].startTime);
 
-        for (let j = timeIndex; j < timeValues.length; j++) { // Search from the timeIndex (the index row value of the startTime)
-                                                              // through to the end of the time values
-          if (uvaClasses[i].endTime > timeValues[j][0]) { // we don't do anything past the endTime of the class
-            // These values "manual-yes" and "manual-both" are read later when we are filling in colors
-            let isRoomManuallyAssigned = "manual-yes";
-            let isRoomManuallyAssignedAndClassUndersized = "manual-both";
-            let rowToFill = j;
-            // Check if it is under capacity
-            if (uvaClasses[i].enrollment < rooms[roomIndex].capacity * undersizedClassBuffer) {
-              fillOpenSlot(uvaClasses[i], rowToFill, roomIndex, isRoomManuallyAssignedAndClassUndersized);
-            }
-            else fillOpenSlot(uvaClasses[i], rowToFill, roomIndex, isRoomManuallyAssigned);
+        let startRow = timeIndex;
+        let courseDuration = 0;
+
+        // Find the course duration
+        for (let j = timeIndex; j < timeValues.length; j++) { 
+          if (uvaClasses[i].endTime > timeValues[j][0]) { 
+            courseDuration++;
           }
           else break;
         }
+
+        // Check if it is under capacity. If so, fill the slot with the color for an under-capacity room.
+        // If not, fill it with the manually-assigned color.
+        if (uvaClasses[i].enrollment < rooms[roomIndex].capacity * undersizedClassBuffer) {
+          fillOpenSlot(uvaClasses[i], startRow, courseDuration, roomIndex, undersizedClassColor);
+        }
+        else fillOpenSlot(uvaClasses[i], startRow, courseDuration, roomIndex, manuallyAssignedRoomColor);
       }
     }
   }
 
-  function attemptToMakeSchedule() {
+  function MakeTempSchedule() {
 
     // The times we are using for classes
     let times = calendar.getRange("A3:A56");
@@ -185,14 +195,13 @@ function main(workbook: ExcelScript.Workbook) {
     let cellTimeValues = times.getValues() as number[][];
 
     for (let i = 0; i < uvaClasses.length; i++) {
-
       if (uvaClasses[i].assignedRoom != "") { // skip manually assigned rooms
         continue;
       }
 
       for (let j = 0; j < timeRowCount; j++) {
         if (cellTimeValues[j][0] == uvaClasses[i].startTime) {
-          let wholeCourseDurationOpenOnCalendar = 1; // boolean as number; we check every day and time and then multiply all these values together-- if there is a zero for "F" it won't place the course in MW
+          let wholeCourseDurationOpenOnCalendar = 1; // boolean as number; we check every day and time and then multiply all these values together-- if, for instance, in a MWF class there is a zero for "F" it won't place the course in MW
           var foundRoomIndex: number; // The index value of the open room in ours rooms array
           let courseDuration = 0; // How many rows is the duration of the course?
           let currentRow = j; // The current row we are checking 
@@ -216,19 +225,11 @@ function main(workbook: ExcelScript.Workbook) {
           let roomFoundIndex = roomFindAttempt[1]; // The second value of the tuple is the index of the room in the rooms array
 
           if (isRoomFound) { // if we checked the whole duration and it's open
-            for (let k = 0; k < courseDuration; k++) {
-              let isRoomAlreadyManuallyAssigned = "no"; // This value is for manual assignment; it may seem counterintuitive that we are "filling" a slot and saying 
-              // it hasn't been assigned, but this is to track whether it was manually assigned (i.e. "locked") or not
-              // this function is "automatically" assigning it, hence the "no" to manual assignment
-              fillOpenSlot(uvaClasses[i], currentRow, courseDuration, currentRow + k, roomFoundIndex, isRoomAlreadyManuallyAssigned);
-            }
-
+            fillOpenSlot(uvaClasses[i], currentRow, courseDuration, roomFoundIndex, );
           }
         }
       }
-
     }
-
   }
 
 
@@ -248,7 +249,7 @@ function main(workbook: ExcelScript.Workbook) {
 
         // The rooms array contains rooms.schedule arrays that then contain dictionaries with key values for each day "M", "T", "W", etc.
         // Within those are arrays for the slots; importantly, the rooms.schedules don't know or care about times, they only care about slots; 
-        // times are handled in attemptToMakeSchedule function and converted to index values to check slots in these arrays
+        // times are handled in MakeTempSchedule function and converted to index values to check slots in these arrays
         for (let j = 0; j < courseDuration; j++) { // we need to check the whole duration; again, duration is slots, not actual times, which this array doesn't 
           // know nor care about
           if (uvaClass.day.includes("M")) {
@@ -324,66 +325,56 @@ function main(workbook: ExcelScript.Workbook) {
   }
 
 
-  function fillOpenSlot(uvaClass: UVAClass, startRow: number, courseDuration: number, row: number, foundRoomIndex: number, isRoomAlreadyManuallyAssigned: string) {
+  function fillOpenSlot(uvaClass: UVAClass, startRow: number, courseDuration: number, foundRoomIndex: number, colorValue: string) {
     let courseInfo = uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " [" + uvaClass.enrollment + "] " + " <" + uvaClass.rowInDatabase + ">" + " {" + uvaClass.uniqueIndex + "}";
 
-    function checkIfAlreadyAssigned(dayOfWeek: string) {// If we assigned two or more classes to the same room at the same time
+    let adjacentClassColorValues : string[] = []
+
+    checkDaysOfWeek(checkIfManuallyAssigned);
+    checkDaysOfWeek(checkAdjacentColorValues);
+    checkDaysOfWeek(assignScheduleValues);
+
+    function checkDaysOfWeek (fn: (dayOfWeek: string) => void) {
+      if (uvaClass.day.includes("M")) {
+        fn("M")
+      }
+      if (uvaClass.day.includes("T")) {
+        fn("T")
+      }
+      if (uvaClass.day.includes("W")) {
+        fn("W")
+      }
+      if (uvaClass.day.includes("R")) {
+        fn("R")
+      }
+      if (uvaClass.day.includes("F")) {
+        fn("F")
+      }
+    }
+
+    function checkIfManuallyAssigned(dayOfWeek: string) {// If we assigned two or more classes to the same room at the same time
                                                         // This can happen due to manual assignment errors; it won't happen automatically
-      if (rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].classData != "") {
-        let currentInfoInRoom = rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].classData;
-        courseInfo = currentInfoInRoom + " /-/ " + courseInfo;
-        console.log("ERROR: duplicate manual assignment for " + uvaClass.courseMnemonic + " " + uvaClass.courseNumber);
+      for (let row = startRow; row < startRow + courseDuration; row++) {
+        if (rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].classData != "") {
+          let currentInfoInRoom = rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].classData;
+          courseInfo = currentInfoInRoom + " /-/ " + courseInfo;
+          console.log("ERROR: duplicate manual assignment for " + uvaClass.courseMnemonic + " " + uvaClass.courseNumber);
+        }
       }
     }
 
     function assignScheduleValues(dayOfWeek: string) {
-      rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].classData = courseInfo;
-      // rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].push(isRoomAlreadyManuallyAssigned);
-    }
-
-    function assignColorIndexValue(dayOfWeek: string) {
-      if (startRow == row) { // The first time through for the whole duration of the course
-        let adjacentColorIndexAbove = rooms[foundRoomIndex].schedule.get(dayOfWeek)[row - 1].colorIndex;
-        let adjacentColorIndexBelow = rooms[foundRoomIndex].schedule.get(dayOfWeek)[row + courseDuration].colorIndex;
-        for (let i = 0; i < mwfColors.length; i++) { // we could use either mwfColors or tthColors, they are both the same length
-          if (colorIndex != adjacentColorIndexAbove && colorIndex != adjacentColorIndexBelow) {
-            break;
-          }
-          else colorIndex++;
-        }
+      for (let row = startRow; row < startRow + courseDuration; row++) {
+        rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].classData = courseInfo;
       }
-      // TODO: this needs to check each day of the week to make sure they all work before assigning a color index value
-      rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].colorIndex = colorIndex;
     }
 
-
-    if (uvaClass.day.includes("M")) {
-      checkIfAlreadyAssigned("M");
-      assignScheduleValues("M");
-      assignColorIndexValue("M");
+    function checkAdjacentColorValues(dayOfWeek: string) {
+      let adjacentColorValueAbove = rooms[foundRoomIndex].schedule.get(dayOfWeek)[startRow - 1].colorData;
+      let adjacentColorValueBelow = rooms[foundRoomIndex].schedule.get(dayOfWeek)[startRow + courseDuration].colorData;
+      adjacentClassColorValues.push(adjacentColorValueAbove)
+      adjacentClassColorValues.push(adjacentColorValueBelow)
     }
-    if (uvaClass.day.includes("T")) {
-      checkIfAlreadyAssigned("T");
-      assignScheduleValues("T");
-      assignColorIndexValue("T");
-    }
-
-    if (uvaClass.day.includes("W")) {
-      checkIfAlreadyAssigned("W");
-      assignScheduleValues("W");
-      assignColorIndexValue("W");
-    }
-    if (uvaClass.day.includes("R")) {
-      checkIfAlreadyAssigned("R");
-      assignScheduleValues("R");
-      assignColorIndexValue("R");
-    }
-    if (uvaClass.day.includes("F")) {
-      checkIfAlreadyAssigned("F");
-      assignScheduleValues("F");
-      assignColorIndexValue("F");
-    }
-
   }
 
   function createScheduleBasics() { // Fills out the times on the chart

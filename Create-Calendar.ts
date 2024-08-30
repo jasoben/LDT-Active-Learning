@@ -56,7 +56,8 @@ function main(workbook: ExcelScript.Workbook) {
   let undersizedClassBuffer = .67; // Classes with enrollment that are less than this fraction of the room size are undersized
 
   // Coloring the chart
-  let classColors: string[] = ["b4f2ac", "dfe8ae", "fce4d6", "cccccc", "999999", "eeeeee", "de5c7a", "red", "red", "b2bded", "adf0dd", "e9c6f7", "dddddd", "333333", "red", "red", "red", "red"]; 
+  let mwfColors: string[] = ["b4f2ac", "dfe8ae", "fce4d6", "cccccc", "999999", "eeeeee", "de5c7a", "red", "red"]; // The color blocks we use for MWF classes-- for ease of reading the chart
+  let trColors: string[] = ["b2bded", "adf0dd", "e9c6f7", "dddddd", "333333", "red", "red", "red", "red"]; // same as above, but for TTh
   let colorIndex = 0; // A number we use to track which set of colors to use: mwf or tth
   let assignedRoomColor = "dbdbdb"; // Color for when we have "locked" or assigned a room (possibly redundant)
   let assignedAndUnderSizedColor = "red"; // Color for when it is "locked" or assigned, and undersized (possibly redundant)
@@ -415,13 +416,16 @@ function main(workbook: ExcelScript.Workbook) {
       roomNameCell.setValue(rooms[i].name);
       roomNameCell.getFormat().getFont().setBold(true);
       let uniqueIndexesAndColorIndexes: number[][] = []
-      let availableColorIndexes: number[] = []
+      let availableMWFColorIndexes: number[] = []
+      let availableTRColorIndexes: number[] = []
 
       // Populate with the index values of the colors (which both have the same length)
-      for (let j = 0; j < classColors.length; j++) {
-        availableColorIndexes.push(j);
+      for (let j = 0; j < mwfColors.length; j++) {
+        availableMWFColorIndexes.push(j);
       }
-      
+      for (let j = 0; j < trColors.length; j++) {
+        availableTRColorIndexes.push(j);
+      }
 
       makeColumn(1, "Monday", "M");
       makeColumn(2, "Tuesday", "T");
@@ -455,15 +459,29 @@ function main(workbook: ExcelScript.Workbook) {
           if (uniqueIndexesAndColorIndexes.some(subArray => subArray[0] == uniqueIndex)) {
             let subArrayIndex = uniqueIndexesAndColorIndexes.findIndex(subArray => subArray[0] == uniqueIndex);
             let subArrayColorIndex = uniqueIndexesAndColorIndexes[subArrayIndex][1];
-            rooms[i].schedule.get(dayChar)[j].colorData = classColors[subArrayColorIndex];
+            if (dayChar == "M" || dayChar == "W" || dayChar == "F") {
+              rooms[i].schedule.get(dayChar)[j].colorData = mwfColors[subArrayColorIndex];
+            }
+            else {
+              rooms[i].schedule.get(dayChar)[j].colorData = trColors[subArrayColorIndex];
+            }
           }
 
           // Then if it hasn't already been added to the list, we check to see if it is different from the one above it
           else if (classData != "") {
-            rooms[i].schedule.get(dayChar)[j].colorData = classColors[availableColorIndexes[0]];
-            uniqueIndexesAndColorIndexes.push([uniqueIndex, availableColorIndexes[0]]);
-            availableColorIndexes.splice(0, 1);
+            if (dayChar == "M" || dayChar == "W" || dayChar == "F") {
+              rooms[i].schedule.get(dayChar)[j].colorData = mwfColors[availableMWFColorIndexes[0]];
+              uniqueIndexesAndColorIndexes.push([uniqueIndex, availableMWFColorIndexes[0]]);
+              availableMWFColorIndexes.splice(0, 1);
+              
+            }
+            else {
+              rooms[i].schedule.get(dayChar)[j].colorData = trColors[availableTRColorIndexes[0]];
+              uniqueIndexesAndColorIndexes.push([uniqueIndex, availableTRColorIndexes[0]]);
+              availableTRColorIndexes.splice(0, 1);
+            }
           }
+          
           
         }
 

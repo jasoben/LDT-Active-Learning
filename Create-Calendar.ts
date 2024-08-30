@@ -56,8 +56,8 @@ function main(workbook: ExcelScript.Workbook) {
   let undersizedClassBuffer = .67; // Classes with enrollment that are less than this fraction of the room size are undersized
 
   // Coloring the chart
-  let mwfColors: string[] = ["b4f2ac", "dfe8ae", "fce4d6", "cccccc", "999999", "eeeeee", "de5c7a", "red", "red"]; // The color blocks we use for MWF classes-- for ease of reading the chart
-  let trColors: string[] = ["b2bded", "adf0dd", "e9c6f7", "dddddd", "333333", "red", "red", "red", "red"]; // same as above, but for TTh
+  let mwfColors: string[] = ["#BD9CDB", "#D07B82", "#8B7BD0", "#D07BB5", "#A77BD0", "#DB9CC7", "#D19CDB", "#A89CDB", "#DBB5B8", "#D3A6DB", "#C371DA"]; // The color blocks we use for MWF classes-- for ease of reading the chart
+  let trColors: string[] = ["#B5DB9C", "#6AB39D", "#A6B36A", "#6AB383", "#87B36A", "#9CDBB2", "#9CDB9D", "#C5DC5C", "#9CDBC8", "#A6DBA7", "#72B8B8", "#ABDD09", "#60CBD5", "#D7D276"]; // same as above, but for TTh
   let colorIndex = 0; // A number we use to track which set of colors to use: mwf or tth
   let assignedRoomColor = "dbdbdb"; // Color for when we have "locked" or assigned a room (possibly redundant)
   let assignedAndUnderSizedColor = "red"; // Color for when it is "locked" or assigned, and undersized (possibly redundant)
@@ -131,7 +131,7 @@ function main(workbook: ExcelScript.Workbook) {
     let defaultValuesF: classAndColor[] = [];
 
     for (let i = 0; i < numberOfRowsInCalendarSheet; i++) {
-      defaultValuesM.push({classData: "" as string, colorData: "" as string, uniqueIndex: -1 as number});
+      defaultValuesM.push({ classData: "" as string, colorData: "" as string, uniqueIndex: -1 as number });
       defaultValuesT.push({ classData: "" as string, colorData: "" as string, uniqueIndex: -1 as number });
       defaultValuesW.push({ classData: "" as string, colorData: "" as string, uniqueIndex: -1 as number });
       defaultValuesR.push({ classData: "" as string, colorData: "" as string, uniqueIndex: -1 as number });
@@ -371,15 +371,13 @@ function main(workbook: ExcelScript.Workbook) {
       for (let i = startRow; i < startRow + courseDuration; i++) {
         if (roomColorInfo == "manuallyAssignedColor") {
           rooms[foundRoomIndex].schedule.get(dayOfWeek)[i].colorData = manuallyAssignedRoomColor;
-          return;
         }
         else if (roomColorInfo == "undersizedColor") {
           rooms[foundRoomIndex].schedule.get(dayOfWeek)[i].colorData = undersizedClassColor;
-          return;
         }
-        
+
       }
-      
+
     }
   }
 
@@ -411,7 +409,7 @@ function main(workbook: ExcelScript.Workbook) {
     let spacer = 6; // 5 days + 1 column white space
     console.log("filling schedule");
     for (let i = 0; i < rooms.length; i++) {
-      console.log("filling step");
+      
       let roomNameCell = calendar.getCell(0, (i * spacer) + 1); // Get every 7th cell, staring in the 2nd column
       roomNameCell.setValue(rooms[i].name);
       roomNameCell.getFormat().getFont().setBold(true);
@@ -438,7 +436,11 @@ function main(workbook: ExcelScript.Workbook) {
         let courseScheduleData: string[][] = [];
         for (let j = 0; j < rooms[i].schedule.get(dayChar).length; j++) { // separate out the schedule data from any other relevant data
           courseScheduleData.push([""]);
-          courseScheduleData[j][0] = rooms[i].schedule.get(dayChar)[j].classData;
+          let classData = rooms[i].schedule.get(dayChar)[j].classData;
+          if (classData == "") {
+            classData = "-";
+          }
+          courseScheduleData[j][0] = classData;
         }
         let dayCell = entireSheet.getCell(1, (i * spacer) + spacerValue);
         dayCell.setValue(dayOfWeek);
@@ -450,13 +452,18 @@ function main(workbook: ExcelScript.Workbook) {
 
         // Set color data for cells in the generated sheet  
         for (let j = 0; j < courseScheduleData.length; j++) {
-          
+
           let uniqueIndex: number = rooms[i].schedule.get(dayChar)[j].uniqueIndex;
           let colorData = rooms[i].schedule.get(dayChar)[j].colorData;
           let classData = rooms[i].schedule.get(dayChar)[j].classData;
 
+          // Check if we manually assigned color data due to it being undersized, etc.
+          if (colorData != "") {
+            
+          }
+
           // First we check if the class has already been assigned a color this week
-          if (uniqueIndexesAndColorIndexes.some(subArray => subArray[0] == uniqueIndex)) {
+          else if (uniqueIndexesAndColorIndexes.some(subArray => subArray[0] == uniqueIndex)) {
             let subArrayIndex = uniqueIndexesAndColorIndexes.findIndex(subArray => subArray[0] == uniqueIndex);
             let subArrayColorIndex = uniqueIndexesAndColorIndexes[subArrayIndex][1];
             if (dayChar == "M" || dayChar == "W" || dayChar == "F") {
@@ -473,7 +480,7 @@ function main(workbook: ExcelScript.Workbook) {
               rooms[i].schedule.get(dayChar)[j].colorData = mwfColors[availableMWFColorIndexes[0]];
               uniqueIndexesAndColorIndexes.push([uniqueIndex, availableMWFColorIndexes[0]]);
               availableMWFColorIndexes.splice(0, 1);
-              
+
             }
             else {
               rooms[i].schedule.get(dayChar)[j].colorData = trColors[availableTRColorIndexes[0]];
@@ -481,22 +488,23 @@ function main(workbook: ExcelScript.Workbook) {
               availableTRColorIndexes.splice(0, 1);
             }
           }
-          
-          
+
+
         }
 
         // Finally we actually add the colors
         for (let j = 0; j < courseScheduleData.length; j++) {
           let coloredCell = entireSheet.getCell(j + startingRowIndexForTimes, (i * spacer) + spacerValue);
           let colorData = rooms[i].schedule.get(dayChar)[j].colorData;
-          
+
           if (colorData != "") {
             coloredCell.getFormat().getFill().setColor(colorData);
+            
           }
         }
       }
 
-      
+
     }
 
   }

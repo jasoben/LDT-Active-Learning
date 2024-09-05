@@ -48,7 +48,7 @@ function main(workbook: ExcelScript.Workbook) {
       startingRowIndexForCourseData = i + 1;
     }
   }
-  let startingRowNumberForCourseData = startingRowIndexForCourseData + 1; 
+  let startingRowNumberForCourseData = startingRowIndexForCourseData + 1;
   let classData = courses.getRange("A" + startingRowNumberForCourseData as string + ":O" + rowCount as string).getValues();
 
   // Undersized classes
@@ -175,8 +175,14 @@ function main(workbook: ExcelScript.Workbook) {
         // If not, fill it with the manually-assigned color.
         if (uvaClasses[i].enrollment < rooms[roomIndex].capacity * undersizedClassBuffer) {
           fillOpenSlot(uvaClasses[i], startRow, courseDuration, roomIndex, "undersizedColor");
+          let courseRowNumber = uvaClasses[i].rowInDatabase;
+          reportAssignment(courseRowNumber, "assigned manually and undersized");
         }
-        else fillOpenSlot(uvaClasses[i], startRow, courseDuration, roomIndex, "manuallyAssignedColor");
+        else {
+          fillOpenSlot(uvaClasses[i], startRow, courseDuration, roomIndex, "manuallyAssignedColor");
+          let courseRowNumber = uvaClasses[i].rowInDatabase;
+          reportAssignment(courseRowNumber, "assigned manually");
+        }
       }
     }
   }
@@ -219,17 +225,35 @@ function main(workbook: ExcelScript.Workbook) {
           let roomFoundIndex = roomFindAttempt[1]; // The second value of the tuple is the index of the room in the rooms array
 
           if (isRoomFound) { // if we checked the whole duration and it's open
-            fillOpenSlot(uvaClasses[i], currentRow, courseDuration, roomFoundIndex, "automaticColors");
+            if (uvaClasses[i].enrollment < rooms[roomFoundIndex].capacity * undersizedClassBuffer) {
+              fillOpenSlot(uvaClasses[i], currentRow, courseDuration, roomFoundIndex, "undersizedColor");
+            }
+            else { 
+              fillOpenSlot(uvaClasses[i], currentRow, courseDuration, roomFoundIndex, "automaticColors");
+            }
             let rowNumber = uvaClasses[i].rowInDatabase;
-            courses.getCell(rowNumber, 15).setValue("yes");
+            reportAssignment(rowNumber, "automatically assigned");
           }
           else {
             let rowNumber = uvaClasses[i].rowInDatabase;
-            courses.getCell(rowNumber, 15).setValue("no");
+            reportAssignment(rowNumber, "no");
+            
           }
         }
       }
     }
+  }
+
+  function reportAssignment(rowNumber: number, value: string) {
+    courses.getCell(rowNumber, 15).setValue(value);
+    if (value.includes("already") || value == "no") {
+      courses.getCell(rowNumber, 15).getFormat().getFill().setColor("red");
+    }
+    else {
+      courses.getCell(rowNumber, 15).getFormat().getFill().setColor("#cccccc");
+    }
+
+
   }
 
 
@@ -352,7 +376,11 @@ function main(workbook: ExcelScript.Workbook) {
         if (rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].classData != "") {
           let currentInfoInRoom = rooms[foundRoomIndex].schedule.get(dayOfWeek)[row].classData;
           courseInfo = currentInfoInRoom + " /-/ " + courseInfo;
+          roomColorInfo = "double-booked";
           console.log("ERROR: duplicate manual assignment for " + uvaClass.courseMnemonic + " " + uvaClass.courseNumber);
+
+          let courseRowNumber = uvaClass.rowInDatabase;
+          reportAssignment(courseRowNumber, "room already manually assigned to " + currentInfoInRoom);
         }
       }
     }
@@ -372,6 +400,10 @@ function main(workbook: ExcelScript.Workbook) {
         }
         else if (roomColorInfo == "undersizedColor") {
           rooms[foundRoomIndex].schedule.get(dayOfWeek)[i].colorData = undersizedClassColor;
+        }
+        else if (roomColorInfo == "double-booked") {
+          rooms[foundRoomIndex].schedule.get(dayOfWeek)[i].colorData = conflictColor;
+          
         }
 
       }
@@ -409,7 +441,7 @@ function main(workbook: ExcelScript.Workbook) {
     for (let i = 0; i < rooms.length; i++) {
       console.log("filling room: " + rooms[i].name);
       let roomNameCell = calendar.getCell(0, (i * spacer) + 1); // Get every 7th cell, staring in the 2nd column
-      
+
       roomNameCell.setValue(rooms[i].name);
       roomNameCell.getFormat().getFont().setBold(true);
       let uniqueIndexesAndColorIndexes: number[][] = []
@@ -498,7 +530,6 @@ function main(workbook: ExcelScript.Workbook) {
 
           if (colorData != "") {
             coloredCell.getFormat().getFill().setColor(colorData);
-            
           }
         }
       }

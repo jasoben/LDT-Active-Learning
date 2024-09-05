@@ -48,7 +48,7 @@ function main(workbook: ExcelScript.Workbook) {
       startingRowIndexForCourseData = i + 1;
     }
   }
-  let startingRowNumberForCourseData = startingRowIndexForCourseData + 1; // The row number is plus one since the index is zero indexed
+  let startingRowNumberForCourseData = startingRowIndexForCourseData + 1; 
   let classData = courses.getRange("A" + startingRowNumberForCourseData as string + ":O" + rowCount as string).getValues();
 
   // Undersized classes
@@ -220,6 +220,12 @@ function main(workbook: ExcelScript.Workbook) {
 
           if (isRoomFound) { // if we checked the whole duration and it's open
             fillOpenSlot(uvaClasses[i], currentRow, courseDuration, roomFoundIndex, "automaticColors");
+            let rowNumber = uvaClasses[i].rowInDatabase;
+            courses.getCell(rowNumber, 15).setValue("yes");
+          }
+          else {
+            let rowNumber = uvaClasses[i].rowInDatabase;
+            courses.getCell(rowNumber, 15).setValue("no");
           }
         }
       }
@@ -299,19 +305,11 @@ function main(workbook: ExcelScript.Workbook) {
           foundSpot = foundSpot * truthValues[j];
         }
       }
-
-
       if (foundSpot == 1) { // If we found a spot, put it in the array for that room's color blocks, and assign the room index for return later
         roomIndex = i;
-        // for (let j = 0; j < daysOfWeek.length; j++) {
-        //   if (uvaClass.enrollment < rooms[roomIndex].capacity * undersizedClassBuffer) {
-        //     rooms[roomIndex].colorBlocks.push([row, daysOfWeek[j], courseDuration, uvaClass.rowInDatabase, 3]); // the color in index 3 is the color for undersized classes
-        //   }
-        //   else
-        //     rooms[roomIndex].colorBlocks.push([row, daysOfWeek[j], courseDuration, uvaClass.rowInDatabase, colorIndex]); // We use this data later to add color to the block
-        // }
         break;
       }
+
     }
 
     return [foundSpot, roomIndex];
@@ -409,8 +407,9 @@ function main(workbook: ExcelScript.Workbook) {
     let spacer = 6; // 5 days + 1 column white space
     console.log("filling schedule");
     for (let i = 0; i < rooms.length; i++) {
-      
+      console.log("filling room: " + rooms[i].name);
       let roomNameCell = calendar.getCell(0, (i * spacer) + 1); // Get every 7th cell, staring in the 2nd column
+      
       roomNameCell.setValue(rooms[i].name);
       roomNameCell.getFormat().getFont().setBold(true);
       let uniqueIndexesAndColorIndexes: number[][] = []

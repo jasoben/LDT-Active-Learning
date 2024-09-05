@@ -232,7 +232,12 @@ function main(workbook: ExcelScript.Workbook) {
               fillOpenSlot(uvaClasses[i], currentRow, courseDuration, roomFoundIndex, "automaticColors");
             }
             let rowNumber = uvaClasses[i].rowInDatabase;
-            reportAssignment(rowNumber, "automatically assigned");
+            if (roomFoundIndex < 16) { // 16 is the index where "Unassigned" begins in the rooms list array
+              reportAssignment(rowNumber, "automatically assigned");
+            }
+            else {
+              reportAssignment(rowNumber, "unassigned");
+            }
           }
           else {
             let rowNumber = uvaClasses[i].rowInDatabase;
@@ -248,6 +253,9 @@ function main(workbook: ExcelScript.Workbook) {
     courses.getCell(rowNumber, 15).setValue(value);
     if (value.includes("already") || value == "no") {
       courses.getCell(rowNumber, 15).getFormat().getFill().setColor("red");
+    }
+    else if (value == "unassigned") {
+      courses.getCell(rowNumber, 15).getFormat().getFill().setColor("pink");
     }
     else {
       courses.getCell(rowNumber, 15).getFormat().getFill().setColor("#cccccc");
@@ -342,7 +350,8 @@ function main(workbook: ExcelScript.Workbook) {
 
 
   function fillOpenSlot(uvaClass: UVAClass, startRow: number, courseDuration: number, foundRoomIndex: number, roomColorInfo: string) {
-    let courseInfo = uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " [" + uvaClass.enrollment + "] " + " <" + uvaClass.rowInDatabase + ">" + " {" + uvaClass.uniqueIndex + "}";
+    let actualRowNumber = uvaClass.rowInDatabase + 1; // Zero index nonsense
+    let courseInfo = uvaClass.courseMnemonic + " " + uvaClass.courseNumber + " " + uvaClass.courseSection + " [" + uvaClass.enrollment + "] " + " <" + actualRowNumber + ">" + " {" + uvaClass.uniqueIndex + "}";
 
     let classDaysOfWeek = "";
 

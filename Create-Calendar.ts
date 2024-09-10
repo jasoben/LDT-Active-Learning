@@ -149,8 +149,15 @@ function main(workbook: ExcelScript.Workbook) {
 
   // Fill classes that have aready been assigned
   function fillInManuallyAssignedClasses() {
+    let bufferOverrunValve = 100; // We need to clear the memory buffer periodically or we get an error
+    let currentBufferNumber = 0;
     let timeValues = calendar.getRange("A3:A56").getValues(); // The time values we are working with, generally from 8:00AM to 9:00PM
     for (let i = 0; i < uvaClasses.length; i++) {
+      currentBufferNumber++;
+      if (currentBufferNumber > bufferOverrunValve) {
+        console.log("Clearing buffer for manually assigned rooms...");
+        currentBufferNumber = 0;
+      }
       // If the room has been assigned, we find that room in our rooms array and the start time in our timeValues array, 
       // then fill the slot in our rooms.schedule array, noting the special colors for "locked" or assigned rooms
       if (uvaClasses[i].assignedRoom != "") {

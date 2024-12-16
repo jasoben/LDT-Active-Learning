@@ -4,7 +4,7 @@ function main(workbook: ExcelScript.Workbook) {
   let startingRowIndexForTimes = 2; // Which row is 800AM on in the chart? (It's actually row 3, but they are indexed from 0)
   let numberOfRowsInCalendarSheet: number = 53 // The row count for 8:00AM - 9:00PM. 
 
-  // Rooms
+  // Room type and array
   type room = {
     name: string;
     capacity: number;
@@ -69,7 +69,7 @@ function main(workbook: ExcelScript.Workbook) {
   type classAndColor = {
     classData: string;
     colorData: string;
-    uniqueIndex: number;
+    uniqueIndex: number; 
   }
 
 
@@ -82,6 +82,7 @@ function main(workbook: ExcelScript.Workbook) {
   MakeTempSchedule(); // Attempt to fill in courses into the schedule based on size, availability, etc.
   createRoomSchedule(); // Create the schedule for each room based on the above schedule
 
+  // Look at the "Courses" sheet and put the data into an array of objects of type UVAClass
   function getDataFromCoursesSheet() {
     for (let i = 0; i < classData.length; i++) {
       uvaClasses[i] = {
@@ -99,7 +100,7 @@ function main(workbook: ExcelScript.Workbook) {
     }
   }
 
-  // This creates the header for the rooms in the calendar sheet
+  // This creates the header row for the rooms in the calendar sheet
   function createRooms() {
     let roomsRange = roomsSheet.getUsedRange();
     let roomsCount = roomsRange.getRowCount();
@@ -118,12 +119,14 @@ function main(workbook: ExcelScript.Workbook) {
   }
 
   // This fills the arrays with empty values so we can put classes in specific indexes of the schedule
+  // The empty values are necessary because we would get index errors if we skipped indexes that were unfilled
+  // during empty times of the day for that room.
   // We build one of these for each room, using a Map with the five days of the week, and a 
   // number of rows equal to the rows in the calendar sheet (53) for 8:00AM - 9:00PM
   // This schedule will be filled in with class data prior to actually putting it on the sheet in the final step.
   function initializeRoomSchedule(): Map<string, classAndColor[]> {
     let schedule: Map<string, classAndColor[]> = new Map<string, classAndColor[]>(); // Where the first string is day of the week, and then the 
-    //class data per cell and color data per cell
+      //class data per cell and color data per cell
     let defaultValuesM: classAndColor[] = [];
     let defaultValuesT: classAndColor[] = [];
     let defaultValuesW: classAndColor[] = [];
@@ -194,6 +197,8 @@ function main(workbook: ExcelScript.Workbook) {
     }
   }
 
+  // This is the temporary schedule based on room availability. Once this function completes
+  // we will take this temporary schedule and finalize it with colors etc. on the Excel sheet.
   function MakeTempSchedule() {
 
     // The times we are using for classes
@@ -208,25 +213,34 @@ function main(workbook: ExcelScript.Workbook) {
 
       for (let j = 0; j < timeRowCount; j++) {
         if (cellTimeValues[j][0] == uvaClasses[i].startTime) {
-          let wholeCourseDurationOpenOnCalendar = 1; // boolean as number; we check every day and time and then multiply all these values together-- if, for instance, in a MWF class there is a zero for "F" it won't place the course in MW
+          let wholeCourseDurationOpenOnCalendar = 1; // boolean as number; we check every day and time 
+            // and then multiply all these values together-- if, for instance, in a 
+            // MWF class there is a zero for "F" that will zero out the week boolean
+            // when AND/multiplied with other values and thus 
+            // it won't place the course in MW 
           var foundRoomIndex: number; // The index value of the open room in ours rooms array
           let courseDuration = 0; // How many rows is the duration of the course?
           let currentRow = j; // The current row we are checking 
 
-          // This loop looks at the times and decides how many rows we need to check; we delineate by :15 time chunks, but if we did :30 or :10 this would be
+          // This loop looks at the times and decides how many rows we need to check; 
+          // we delineate by :15 time chunks, but if we did :30 or :10 this would be
           // a different number of rows
           for (let k = 0; k < 10; k++) { // we need to check for the whole duration of the course
             let nextRowChunkToCheck = k;
             if (cellTimeValues[currentRow + nextRowChunkToCheck][0] >= uvaClasses[i].startTime && cellTimeValues[currentRow + nextRowChunkToCheck][0] < uvaClasses[i].endTime) {
               courseDuration++;
-            } // If the time row to check is still between the start and end times of the course, we check for it 
+            } // If the time row to check is still between the start and end times of the course, 
+              // we check for it 
             else
               break;
           }
 
-          let roomFindAttempt /* Tuple */ = attemptToFindOpenSlot(uvaClasses[i], currentRow, courseDuration);  // We send the row and duration data to this function
-          // which tries to then check against the rooms.schedule arrays in our rooms array; we don't want to send the raw time values because these
+          let roomFindAttempt /* Tuple */ = attemptToFindOpenSlot(uvaClasses[i], currentRow, courseDuration);  
+          // ^ We send the row and duration data to this function
+          // which tries to then check against the rooms.schedule arrays in our rooms array; 
+          // we don't want to send the raw time values because these
           // are meaningless to the array, which only cares about index values
+
           let isRoomFound = roomFindAttempt[0] == 1 ? true : false; // Since the function returns a tuple, we look at the first value of the tuple; 
           // if we succeeded, then we found a room
           let roomFoundIndex = roomFindAttempt[1]; // The second value of the tuple is the index of the room in the rooms array
